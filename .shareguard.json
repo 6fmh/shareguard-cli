@@ -1,17 +1,14 @@
 {
+  "schemaVersion": 1,
   "ignore": [
     "test/fixtures/"
   ],
-  "allow": [
-    {
-      "rule": "email-address",
-      "path": "README.md"
-    },
-    {
-      "rule": "email-address",
-      "path": "test/scanner.test.js"
-    }
-  ],
+  "allow": [],
   "maxFileSize": 2000000,
-  "largeFileSize": 10000000
+  "largeFileSize": 10000000,
+  "entropy": {
+    "enabled": true,
+    "minLength": 32,
+    "threshold": 4.5
+  }
 }

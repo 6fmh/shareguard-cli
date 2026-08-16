@@ -1,4 +1,8 @@
 import "./cli.test.js"
+import "./config.test.js"
+import "./format.test.js"
 import "./ignore.test.js"
+import "./integration.test.js"
 import "./rules.test.js"
 import "./scanner.test.js"
+import "./staged.test.js"

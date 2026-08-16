@@ -1,16 +1,25 @@
 # Contributing
 
-ShareGuard welcomes focused bug fixes, detection rules with realistic test cases, performance improvements, and platform compatibility work.
+ShareGuard welcomes focused bug fixes, detection rules with realistic false-positive coverage, compatibility work, documentation improvements, and performance measurements.
 
 ## Development
 
-Requirements: Node.js 20 or newer.
+Use Node.js 20, 22, or 24.
 
 ```sh
 npm test
-node src/cli.js . --no-color
+npm run check
+node src/cli.js . --fail-on low --no-color
 ```
 
-Keep new detection rules high-signal. Every rule should include tests for detection, redaction, and a nearby non-match. Do not commit real credentials or personal data, even in tests.
+Run `shareguard init` in a temporary project when changing configuration behavior. Test `--staged` against a real Git index when working outside restricted sandboxes.
 
-By participating, you agree to follow the project code of conduct.
+## Detection Rules
+
+Keep new rules high-signal. Every rule change needs detection, nearby non-match, output-redaction, and false-positive tests. Construct credential-shaped test input dynamically at runtime. Do not commit credentials, personal contact details, local machine paths, package archives, caches, coverage output, or generated artifacts.
+
+Maintain the versioned configuration, JSON, SARIF, and baseline contracts. Preserve exit codes unless a documented major-version change requires otherwise.
+
+## Pull Requests
+
+Keep changes scoped, explain user-visible behavior, include tests and documentation, and make sure `npm run check` plus the low-threshold self-scan pass. By participating, you agree to follow the project code of conduct.

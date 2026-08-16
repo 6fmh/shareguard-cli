@@ -1,19 +1,38 @@
 import path from "node:path"
 
 const escapeRegex = value => value.replace(/[|\\{}()[\]^$+?.]/g, "\\$&")
+const normalize = value => value.split(path.sep).join("/").replace(/^\.\//, "").replace(/^\//, "")
+
+const parsePattern = raw => {
+  let value = raw.replace(/(?<!\\)\s+$/, "").replace(/\\ $/, " ")
+  if (!value || value.startsWith("#")) return null
+
+  let negate = false
+  if (value.startsWith("!")) {
+    negate = true
+    value = value.slice(1)
+  } else if (value.startsWith("\\!") || value.startsWith("\\#")) {
+    value = value.slice(1)
+  }
+
+  return value ? { value, negate } : null
+}
 
 export const globToRegex = glob => {
-  const normalized = glob.replaceAll("\\", "/").replace(/^\.\//, "").replace(/^\//, "")
+  const anchored = glob.replaceAll("\\", "/").replace(/^\.\//, "").startsWith("/")
+  const normalized = normalize(glob)
+  const directory = normalized.endsWith("/")
+  const body = normalized.replace(/\/$/, "")
   let source = ""
 
-  for (let index = 0; index < normalized.length; index += 1) {
-    const character = normalized[index]
+  for (let index = 0; index < body.length; index += 1) {
+    const character = body[index]
 
     if (character === "*") {
-      if (normalized[index + 1] === "*") {
+      if (body[index + 1] === "*") {
         index += 1
-        source += normalized[index + 1] === "/" ? "(?:.*/)?" : ".*"
-        if (normalized[index + 1] === "/") index += 1
+        source += body[index + 1] === "/" ? "(?:.*/)?" : ".*"
+        if (body[index + 1] === "/") index += 1
       } else {
         source += "[^/]*"
       }
@@ -24,24 +43,26 @@ export const globToRegex = glob => {
     }
   }
 
-  const hasSlash = normalized.includes("/")
-  const directory = normalized.endsWith("/")
+  const hasSlash = anchored || body.includes("/")
   const prefix = hasSlash ? "^" : "(?:^|/)"
-  const suffix = directory ? ".*$" : "(?:$|/.*$)"
-  return new RegExp(prefix + source.replace(/\/$/, "") + suffix)
+  const suffix = directory ? "(?:/.*)?$" : "(?:$|/.*$)"
+  return new RegExp(prefix + source + suffix)
+}
+
+const staticPrefix = pattern => {
+  const normalized = normalize(pattern).replace(/\/$/, "")
+  const wildcard = normalized.search(/[?*[]/)
+  return wildcard === -1 ? normalized : normalized.slice(0, wildcard)
 }
 
 export const createIgnoreMatcher = patterns => {
   const rules = patterns
-    .map(value => value.trim())
-    .filter(value => value && !value.startsWith("#"))
-    .map(value => ({
-      negate: value.startsWith("!"),
-      regex: globToRegex(value.replace(/^!/, ""))
-    }))
+    .map(parsePattern)
+    .filter(Boolean)
+    .map(rule => ({ ...rule, regex: globToRegex(rule.value), prefix: staticPrefix(rule.value) }))
 
-  return relativePath => {
-    const normalized = relativePath.split(path.sep).join("/")
+  const matcher = relativePath => {
+    const normalized = normalize(relativePath).replace(/\/$/, "")
     let ignored = false
 
     for (const rule of rules) {
@@ -50,4 +71,11 @@ export const createIgnoreMatcher = patterns => {
 
     return ignored
   }
+
+  matcher.shouldDescend = relativePath => {
+    const normalized = `${normalize(relativePath).replace(/\/$/, "")}/`
+    return rules.some(rule => rule.negate && (!rule.prefix || rule.prefix.startsWith(normalized)))
+  }
+
+  return matcher
 }

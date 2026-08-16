@@ -1,9 +1,11 @@
-# Security policy
+# Security Policy
 
-## Reporting a vulnerability
+## Reporting a Vulnerability
 
-Please use GitHub private vulnerability reporting instead of opening a public issue. Include a minimal reproduction, affected versions, and the impact you observed.
+Use GitHub private vulnerability reporting for security issues in ShareGuard. Include affected versions, a minimal reproduction that does not contain real secrets or personal data, impact, and a suggested remediation when available.
+
+Do not open public issues for vulnerabilities that could expose credentials, scan results, repository contents, or bypasses that make those contents unsafe.
 
 ## Scope
 
-ShareGuard reduces accidental disclosure. It does not guarantee that a folder is safe to publish and should be used alongside repository permissions, secret rotation, and code review.
+ShareGuard reduces accidental disclosure; it does not guarantee a folder is safe to publish. It deliberately keeps scanning local, redacts matched values from all output formats, and avoids sending source content to external services. Use it with repository permissions, secret rotation, code review, and provider-side scanning.

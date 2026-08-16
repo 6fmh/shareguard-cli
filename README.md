@@ -1,65 +1,88 @@
 # ShareGuard
 
-**Catch secrets and private data before you share a folder.**
-
-ShareGuard is a fast, zero-dependency CLI that checks source trees, support bundles, take-home projects, dotfile archives, and release folders for information that should not leave your machine.
-
-It reports the location without printing the sensitive value.
+ShareGuard is a zero-dependency Node.js CLI that detects secrets, personal information, risky files, and oversized artifacts before a folder is shared or published. It runs locally and reports file, line, rule, and severity without emitting matched source values.
 
 ```text
-$ shareguard ./release
+$ shareguard ./release --fail-on medium
 HIGH     config/settings.js:12
          Hard-coded credential [generic-secret]
-         const password = "[REDACTED]"
 
-1 finding in 24 files (82 kB), 3 skipped, 0 baselined
+1 finding in 24 files (82 kB), 3 skipped, 4 ignored, 0 baselined, 0 errors
 ```
 
-## Why ShareGuard
+## Install
 
-- Finds common access tokens, private keys, credentials, connection strings, JWTs, email addresses, IP addresses, and local user paths
-- Flags risky filenames such as `.env`, private keys, credential stores, and package registry configs
-- Redacts matched values from terminal and JSON output
-- Honors `.gitignore` plus project-specific ignore and allow rules
-- Creates baselines for known findings without storing the sensitive values
-- Uses useful CI exit codes and structured JSON output
-- Runs on Windows, macOS, and Linux with no runtime dependencies
-
-## Quick start
-
-Node.js 20 or newer is required.
+ShareGuard supports Node.js 20, 22, and 24 on Windows, macOS, and Linux.
 
 ```sh
-git clone <repository-url>
+npm install --global github:6fmh/shareguard-cli
+shareguard --version
+```
+
+To run from a checkout:
+
+```sh
+git clone https://github.com/6fmh/shareguard-cli.git
 cd shareguard-cli
+npm test
 npm link
-shareguard ../folder-to-share
 ```
 
-## Usage
+## Scan
 
-```text
-shareguard [path] [options]
-
---json                    Print machine-readable JSON
---config <file>           Use a custom configuration file
---baseline <file>         Ignore known finding fingerprints
---write-baseline <file>   Save current finding fingerprints
---fail-on <severity>      Exit 1 at low, medium, high, or critical
---no-gitignore            Do not use .gitignore rules
---no-color                Disable terminal colors
---version                 Print the version
---help                    Print help
+```sh
+shareguard
+shareguard ./release --fail-on medium
+shareguard scan ./release --format json
+shareguard --stdin --stdin-filename settings.env < settings.env
+shareguard --staged --format sarif --output shareguard.sarif
 ```
 
-ShareGuard exits with `0` when no findings meet the failure threshold, `1` when they do, and `2` when the scan cannot run. The default failure threshold is `high`.
+`shareguard [scan] [path]` scans the current directory by default. `--staged` reads added and modified content from the Git index, not the working tree, and is intended for pre-commit hooks and CI. `--stdin` reads one content stream and uses `stdin` as its reported filename unless `--stdin-filename` is set.
+
+ShareGuard never follows symlinks. It skips known binary formats and files above `maxFileSize`, while still reporting an oversized file when it exceeds `largeFileSize`.
+
+## Output and Exit Codes
+
+Text is the default output. `--format json` produces the versioned JSON schema and `--format sarif` produces SARIF 2.1 for code-scanning systems. `--json` and `--sarif` are short aliases. `--output <file>` writes the selected format without printing it to standard output.
+
+| Exit code | Meaning |
+| --- | --- |
+| `0` | No finding meets `--fail-on` and scanning completed without read errors. |
+| `1` | At least one finding meets `--fail-on`. |
+| `2` | Invalid input, configuration, baseline, Git state, or an unreadable scan target prevented a complete scan. |
+
+The default failure threshold is `high`. Use `--fail-on low` when validating a repository configuration or privacy-sensitive export.
+
+## Rules
+
+ShareGuard includes high-confidence detection for private keys and provider formats including GitHub, GitLab, AWS, Slack, Stripe, npm, SendGrid, DigitalOcean, PyPI, and Google credentials. It also detects connection-string passwords, JWTs, common hard-coded credential assignments, email addresses, local home paths, and non-documentation IPv4 addresses.
+
+Risky filenames such as `.env`, private-key files, common credential stores, and package registry configuration are reported even when content scanning is skipped. Entropy detection is conservative: it only considers credential-related lines, requires a long mixed-character value, and ignores hexadecimal strings and obvious repetition.
+
+Control scope in a one-off scan:
+
+```sh
+shareguard . --include-rule github-token --include-rule npm-token
+shareguard . --exclude-rule email-address
+shareguard . --category secret
+```
+
+Available categories are `hygiene`, `privacy`, and `secret`. Rule filters can be repeated or supplied as comma-separated values.
 
 ## Configuration
 
-Add `.shareguard.json` at the root of the folder being scanned:
+Create a versioned starter file with:
+
+```sh
+shareguard init
+```
+
+`init` refuses to overwrite an existing file unless `--force` is present. A configuration file named `.shareguard.json` is loaded from the scan root, or use `--config <file>`.
 
 ```json
 {
+  "schemaVersion": 1,
   "ignore": [
     "fixtures/",
     "docs/generated/**"
@@ -71,24 +94,42 @@ Add `.shareguard.json` at the root of the folder being scanned:
     }
   ],
   "maxFileSize": 2000000,
-  "largeFileSize": 10000000
+  "largeFileSize": 10000000,
+  "concurrency": 8,
+  "entropy": {
+    "enabled": true,
+    "minLength": 32,
+    "threshold": 4.5
+  }
 }
 ```
 
-Allow rules can specify `rule`, `path`, or both. Keep them narrow and reviewable.
+All configuration fields are validated. `ignore` is combined with ShareGuard's default generated/build exclusions. `allow` rules must specify a narrow `rule`, `path`, or both. `.gitignore` rules are honored by default; `--no-gitignore` disables them. The matcher supports `*`, `?`, `**`, trailing-directory patterns, root-anchored paths, ordered negation, and re-included files under ignored directories.
+
+`concurrency` is bounded from 1 through 64. It defaults to a small CPU-aware value suitable for large repositories. Disable entropy checks only when a reviewed policy requires it:
+
+```json
+{
+  "entropy": {
+    "enabled": false
+  }
+}
+```
 
 ## Baselines
 
-A baseline lets an existing project adopt ShareGuard without hiding new findings:
+Baselines make incremental adoption practical without storing secret values:
 
 ```sh
 shareguard . --write-baseline .shareguard-baseline.json
 shareguard . --baseline .shareguard-baseline.json
 ```
 
-The baseline contains short SHA-256 fingerprints, not the detected values. Commit it only after reviewing every current finding.
+Baseline files have `schemaVersion: 1` and contain only short SHA-256 finding fingerprints. Writing a baseline refreshes it from every current, non-allowed finding, including findings already suppressed by the supplied baseline. Review every baseline update before committing it.
 
 ## GitHub Actions
+
+Use the included action for normal CI:
 
 ```yaml
 name: ShareGuard
@@ -103,25 +144,34 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: 6fmh/shareguard-cli@main
         with:
-          node-version: 22
-      - run: npm install --global github:OWNER/shareguard-cli
-      - run: shareguard . --fail-on high --no-color
+          fail-on: high
 ```
 
-Replace `OWNER` with the repository owner. Pin a release tag for stable CI once the project reaches `1.0.0`.
+For GitHub code scanning, write SARIF and upload it in a later step:
 
-## Detection philosophy
+```yaml
+      - id: shareguard
+        uses: 6fmh/shareguard-cli@main
+        with:
+          format: sarif
+          output: shareguard.sarif
+      - uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: ${{ steps.shareguard.outputs.sarif }}
+```
 
-ShareGuard favors understandable, local checks over uploading source code to a service. High-severity rules target credential shapes and risky files. Lower-severity privacy rules are intentionally visible but do not fail the default scan.
+The action accepts `path`, `staged`, `fail-on`, `format`, `output`, `config`, and `baseline`. Its `sarif` output is set when both `format: sarif` and `output` are provided.
 
-No scanner can prove that a folder is safe to publish. Treat results as an additional review layer, rotate anything that may have been exposed, and use provider-side secret scanning where available.
+Pin a release tag or commit SHA instead of `main` in stable production workflows.
+
+## Security and Privacy
+
+Findings include a location and a fingerprint, never the matched value or source-line preview. That applies to text, JSON, SARIF, baseline files, and diagnostics. Treat any potential exposure as an incident: remove it from the shared artifact, rotate it with its provider, and review repository history where appropriate.
+
+ShareGuard is a local review layer, not proof that a folder is safe to distribute. Use it alongside provider-side secret scanning, access controls, and code review.
 
 ## Contributing
 
-Read [CONTRIBUTING.md](CONTRIBUTING.md) before submitting a change. Security reports belong in GitHub's private vulnerability reporting flow.
-
-## License
-
-MIT
+See [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), and [CHANGELOG.md](CHANGELOG.md). The project is released under the [MIT License](LICENSE).

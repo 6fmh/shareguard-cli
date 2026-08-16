@@ -1,13 +1,13 @@
 {
   "name": "shareguard-cli",
-  "version": "0.1.0",
-  "description": "Catch secrets and private data before you share a folder.",
+  "version": "0.2.0",
+  "description": "Detect secrets, personal information, risky files, and oversized artifacts before sharing code.",
   "type": "module",
   "bin": {
     "shareguard": "src/cli.js"
   },
   "scripts": {
-    "check": "node --check src/cli.js && node --check src/config.js && node --check src/format.js && node --check src/ignore.js && node --check src/rules.js && node --check src/scanner.js && npm test",
+    "check": "node --check src/action.js && node --check src/cli.js && node --check src/config.js && node --check src/format.js && node --check src/git.js && node --check src/ignore.js && node --check src/rules.js && node --check src/scanner.js && npm test",
     "test": "node test/index.js"
   },
   "keywords": [
@@ -18,13 +18,24 @@
     "scanner",
     "git"
   ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/6fmh/shareguard-cli.git"
+  },
+  "homepage": "https://github.com/6fmh/shareguard-cli#readme",
+  "bugs": {
+    "url": "https://github.com/6fmh/shareguard-cli/issues"
+  },
   "license": "MIT",
   "engines": {
     "node": ">=20"
   },
   "files": [
     "src",
+    "action.yml",
+    "CHANGELOG.md",
     "README.md",
+    "SECURITY.md",
     "LICENSE"
   ]
 }

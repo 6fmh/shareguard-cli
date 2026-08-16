@@ -1,0 +1,57 @@
+name: Bug report
+description: Report incorrect behavior, a regression, or a false result
+title: "bug: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Do not include credentials, personal data, full scan output, or private repository content.
+  - type: input
+    id: version
+    attributes:
+      label: ShareGuard version
+      placeholder: Output of shareguard --version
+    validations:
+      required: true
+  - type: dropdown
+    id: node
+    attributes:
+      label: Node.js version
+      options:
+        - "20"
+        - "22"
+        - "24"
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - Windows
+        - macOS
+        - Linux
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Observed behavior
+      description: Redact all sensitive values and paths before submitting.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal safe reproduction
+      description: Use generated placeholder input only.
+    validations:
+      required: true

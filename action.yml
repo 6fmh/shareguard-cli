@@ -1,0 +1,38 @@
+name: ShareGuard
+description: Detect secrets, personal information, risky files, and oversized artifacts
+author: ShareGuard contributors
+branding:
+  icon: shield
+  color: blue
+inputs:
+  path:
+    description: File or directory to scan
+    required: false
+    default: .
+  staged:
+    description: Scan only staged Git changes
+    required: false
+    default: "false"
+  fail-on:
+    description: Minimum severity that fails the action
+    required: false
+    default: high
+  format:
+    description: Output format
+    required: false
+    default: text
+  output:
+    description: File to receive formatted output
+    required: false
+  config:
+    description: Custom configuration file
+    required: false
+  baseline:
+    description: Baseline file
+    required: false
+outputs:
+  sarif:
+    description: SARIF output path when format is sarif
+runs:
+  using: node24
+  main: src/action.js
