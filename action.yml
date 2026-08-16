@@ -1,5 +1,5 @@
 name: ShareGuard CLI Secret Scanner
-description: Zero-dependency secret and privacy scanner for Git repositories, CI pipelines, and files before sharing
+description: Zero-runtime-dependency GitHub Action for secret detection, PII scanning, risky files, and SARIF output
 author: ShareGuard contributors
 branding:
   icon: shield
@@ -32,7 +32,7 @@ inputs:
     required: false
 outputs:
   sarif:
-    description: SARIF output path when format is sarif
+    description: Output file path when format is sarif and output is set
 runs:
   using: node24
   main: src/action.js

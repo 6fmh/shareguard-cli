@@ -4,7 +4,7 @@ ShareGuard welcomes focused bug fixes, detection rules with realistic false-posi
 
 ## Development
 
-Use Node.js 20, 22, or 24.
+Use Node.js 20, 22, or 24. ShareGuard intentionally has no runtime dependencies, so do not add a dependency for a workflow that can use the Node.js standard library.
 
 ```sh
 npm test
@@ -12,7 +12,7 @@ npm run check
 node src/cli.js . --fail-on low --no-color
 ```
 
-Run `shareguard init` in a temporary project when changing configuration behavior. Test `--staged` against a real Git index when working outside restricted sandboxes.
+Run `shareguard init` in a temporary project when changing configuration behavior. Test `--staged` against a real Git index when working outside restricted sandboxes. Keep examples and diagnostics free of credentials, personal information, and machine-specific paths.
 
 ## Detection Rules
 
@@ -26,4 +26,4 @@ Keep changes scoped, explain user-visible behavior, include tests and documentat
 
 ## Releases
 
-Update the package and CLI versions together, move completed changes into the changelog, and confirm all required checks are green. Draft a GitHub release using the matching version tag. For Marketplace releases, select the Action publishing option and review its categories before publishing. The release workflow verifies the tagged source, packs the npm artifact, and attaches it to the published release.
+Update the package and CLI versions together, move completed changes into the changelog, and confirm all required checks are green. Draft a GitHub release using the matching version tag. For Marketplace releases, select the Action publishing option and review its categories before publishing. The release workflow verifies the tagged source, packs the npm artifact, and attaches it to the published release. Never move or force-update an existing release tag.
