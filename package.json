@@ -1,7 +1,7 @@
 {
   "name": "shareguard-cli",
   "version": "0.2.0",
-  "description": "Detect secrets, personal information, risky files, and oversized artifacts before sharing code.",
+  "description": "Zero-dependency secret and privacy scanner for Git, CI, and GitHub Actions.",
   "type": "module",
   "bin": {
     "shareguard": "src/cli.js"
@@ -13,10 +13,19 @@
   "keywords": [
     "security",
     "secrets",
+    "secret-scanner",
+    "secret-detection",
     "privacy",
+    "pii",
     "cli",
     "scanner",
-    "git"
+    "git",
+    "github-action",
+    "sarif",
+    "pre-commit",
+    "devsecops",
+    "data-loss-prevention",
+    "ci-cd"
   ],
   "repository": {
     "type": "git",

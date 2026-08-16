@@ -1,5 +1,5 @@
 name: ShareGuard CLI Secret Scanner
-description: Detect secrets, personal information, risky files, and oversized artifacts
+description: Zero-dependency secret and privacy scanner for Git repositories, CI pipelines, and files before sharing
 author: ShareGuard contributors
 branding:
   icon: shield
