@@ -2,14 +2,14 @@
 
 All notable changes to this project are documented in this file.
 
-The latest release is [0.2.0](https://github.com/6fmh/shareguard-cli/releases/tag/v0.2.0). Release tags are used for the GitHub Action, and the release workflow attaches the matching npm package archive.
+The latest release is [0.2.1](https://github.com/6fmh/shareguard-cli/releases/tag/v0.2.1). Release tags are used for the GitHub Action, and the release workflow attaches the matching npm package archive.
 
-## Unreleased
+## 0.2.1
 
 ### Changed
 
 - Improved repository onboarding, GitHub discovery metadata, workflow examples, and security documentation.
-- Bumped the CLI and package version to `0.2.1`; publish a matching `v0.2.1` release before changing Action examples to that tag.
+- Bumped the CLI and package version to `0.2.1`.
 
 ## 0.2.0
 

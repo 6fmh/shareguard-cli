@@ -34,7 +34,7 @@ HIGH     config/settings.js:12
 ShareGuard is currently installed from this GitHub repository; no npm registry package is required.
 
 ```sh
-npm install --global github:6fmh/shareguard-cli#v0.2.0
+npm install --global github:6fmh/shareguard-cli#v0.2.1
 shareguard --version
 shareguard . --fail-on high
 ```
@@ -93,12 +93,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: 6fmh/shareguard-cli@v0.2.0
+      - uses: 6fmh/shareguard-cli@v0.2.1
         with:
           fail-on: high
 ```
 
-Use the versioned `v0.2.0` release tag above, or pin the action to a full commit SHA in a production workflow.
+Use the versioned `v0.2.1` release tag above, or pin the action to a full commit SHA in a production workflow.
 
 ## GitHub Action and SARIF
 
@@ -122,7 +122,7 @@ jobs:
       - uses: actions/checkout@v4
       - id: shareguard
         continue-on-error: true
-        uses: 6fmh/shareguard-cli@v0.2.0
+        uses: 6fmh/shareguard-cli@v0.2.1
         with:
           format: sarif
           output: shareguard.sarif
@@ -246,4 +246,4 @@ No. GitHub and other providers help detect secrets in repository history and aft
 
 Use Node.js 20, 22, or 24. Run `npm test`, `npm run check`, and `node src/cli.js . --fail-on low --no-color` before opening a pull request. Detection tests must construct credential-shaped data at runtime and must assert complete redaction. See [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
 
-The current release is [v0.2.0](https://github.com/6fmh/shareguard-cli/releases/tag/v0.2.0); changes are summarized in [CHANGELOG.md](CHANGELOG.md). ShareGuard is released under the [MIT License](LICENSE).
+The current release is [v0.2.1](https://github.com/6fmh/shareguard-cli/releases/tag/v0.2.1); changes are summarized in [CHANGELOG.md](CHANGELOG.md). ShareGuard is released under the [MIT License](LICENSE).
