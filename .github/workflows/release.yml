@@ -1,9 +1,8 @@
 name: Release
 
 on:
-  push:
-    tags:
-      - "v*"
+  release:
+    types: [published]
 
 permissions:
   contents: write
@@ -13,6 +12,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -23,6 +24,6 @@ jobs:
           name: npm-package
           path: "*.tgz"
           if-no-files-found: error
-      - run: gh release create "$GITHUB_REF_NAME" ./*.tgz --generate-notes --verify-tag
+      - run: gh release upload "${{ github.event.release.tag_name }}" ./*.tgz --clobber
         env:
           GH_TOKEN: ${{ github.token }}
