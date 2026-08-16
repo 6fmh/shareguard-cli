@@ -144,7 +144,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: 6fmh/shareguard-cli@main
+      - uses: 6fmh/shareguard-cli@v0.2.0
         with:
           fail-on: high
 ```
@@ -153,7 +153,7 @@ For GitHub code scanning, write SARIF and upload it in a later step:
 
 ```yaml
       - id: shareguard
-        uses: 6fmh/shareguard-cli@main
+        uses: 6fmh/shareguard-cli@v0.2.0
         with:
           format: sarif
           output: shareguard.sarif
@@ -164,7 +164,7 @@ For GitHub code scanning, write SARIF and upload it in a later step:
 
 The action accepts `path`, `staged`, `fail-on`, `format`, `output`, `config`, and `baseline`. Its `sarif` output is set when both `format: sarif` and `output` are provided.
 
-Pin a release tag or commit SHA instead of `main` in stable production workflows.
+Pin a release tag or commit SHA in stable production workflows.
 
 ## Security and Privacy
 
