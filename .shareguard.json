@@ -1,0 +1,17 @@
+{
+  "ignore": [
+    "test/fixtures/"
+  ],
+  "allow": [
+    {
+      "rule": "email-address",
+      "path": "README.md"
+    },
+    {
+      "rule": "email-address",
+      "path": "test/scanner.test.js"
+    }
+  ],
+  "maxFileSize": 2000000,
+  "largeFileSize": 10000000
+}

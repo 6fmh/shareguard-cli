@@ -1,0 +1,7 @@
+node_modules/
+.npm-cache/
+coverage/
+.shareguard-baseline.json
+*.log
+.DS_Store
+Thumbs.db
