@@ -1,6 +1,9 @@
 node_modules/
 .npm-cache/
 coverage/
+.env
+.env.*
+!.env.example
 .shareguard-baseline.json
 *.sarif
 *.tgz

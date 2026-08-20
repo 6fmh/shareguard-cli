@@ -2,7 +2,26 @@
 
 All notable changes to this project are documented in this file.
 
-The latest release is [0.2.1](https://github.com/6fmh/shareguard-cli/releases/tag/v0.2.1). Release tags are used for the GitHub Action, and the release workflow attaches the matching npm package archive.
+The latest release is [0.3.0](https://github.com/6fmh/shareguard-cli/releases/tag/v0.3.0). Release tags are used for the GitHub Action, and the release workflow attaches the matching npm package archive.
+
+## 0.3.0
+
+### Added
+
+- Provider secret detection for OpenAI, Anthropic, Google OAuth client secrets, Azure client secrets, Slack app tokens and incoming webhook URLs, Discord and Telegram bot tokens, Twilio account and API-key SIDs, HashiCorp Vault, Terraform Cloud, Doppler, Grafana service-account and cloud tokens, Cloudflare, Square, Shopify, Notion, and Linear.
+- Privacy detection for non-documentation IPv6 addresses.
+
+### Changed
+
+- Broadened the Stripe rule to cover restricted keys (`rk_live`/`rk_test`) alongside secret keys.
+- Tightened the JWT rule to require a `eyJ`-prefixed header and payload, reducing false positives.
+- Expanded the generic hard-coded credential rule to recognize more key names (secret key, access key, passphrase, `pwd`) and unquoted values.
+- Broadened the placeholder filter so common dummy and reference values (for example environment lookups and `*-here` suffixes) are not reported.
+- Excluded link-local, broadcast, and multicast ranges from the IPv4 rule to reduce noise.
+- Hardened the hard-coded credential rule against pathological backtracking on large inputs.
+- Stopped the IPv4 rule from matching version strings such as `1.2.3.4.5`.
+- Stopped the email rule from matching asset references such as `logo@2x.png`.
+- Bumped the CLI and package version to `0.3.0`.
 
 ## 0.2.1
 

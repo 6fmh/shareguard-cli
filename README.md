@@ -34,7 +34,7 @@ HIGH     config/settings.js:12
 ShareGuard is currently installed from this GitHub repository; no npm registry package is required.
 
 ```sh
-npm install --global github:6fmh/shareguard-cli#v0.2.1
+npm install --global github:6fmh/shareguard-cli#v0.3.0
 shareguard --version
 shareguard . --fail-on high
 ```
@@ -93,12 +93,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: 6fmh/shareguard-cli@v0.2.1
+      - uses: 6fmh/shareguard-cli@v0.3.0
         with:
           fail-on: high
 ```
 
-Use the versioned `v0.2.1` release tag above, or pin the action to a full commit SHA in a production workflow.
+Use the versioned `v0.3.0` release tag above, or pin the action to a full commit SHA in a production workflow.
 
 ## GitHub Action and SARIF
 
@@ -122,7 +122,7 @@ jobs:
       - uses: actions/checkout@v4
       - id: shareguard
         continue-on-error: true
-        uses: 6fmh/shareguard-cli@v0.2.1
+        uses: 6fmh/shareguard-cli@v0.3.0
         with:
           format: sarif
           output: shareguard.sarif
@@ -141,8 +141,8 @@ SARIF 2.1 locations contain paths and line numbers, rule descriptions, severitie
 
 Rules are grouped into three categories:
 
-- `secret`: private keys; GitHub, GitLab, AWS, Slack, Stripe, npm, SendGrid, DigitalOcean, PyPI, and Google credentials; JWTs; connection-string passwords; hard-coded credential assignments; and conservative high-entropy credential-like values.
-- `privacy`: email addresses, local Windows and Unix home paths, and non-documentation IPv4 addresses.
+- `secret`: private keys; GitHub, GitLab, and AWS credentials; OpenAI, Anthropic, and Google API keys; Google OAuth and Azure client secrets; Slack tokens, app tokens, and webhook URLs; Stripe, npm, SendGrid, DigitalOcean, PyPI, Discord, and Telegram credentials; Twilio account and API-key SIDs; HashiCorp Vault, Terraform Cloud, Doppler, Grafana, Cloudflare, Square, Shopify, Notion, and Linear tokens; JWTs; connection-string passwords; hard-coded credential assignments; and conservative high-entropy credential-like values.
+- `privacy`: email addresses, local Windows and Unix home paths, and non-documentation IPv4 and IPv6 addresses.
 - `hygiene`: risky filenames such as `.env`, private-key files, and credential stores, plus oversized files.
 
 Provider-side secret scanning remains valuable for repository history and post-push detection. ShareGuard covers the earlier boundary: arbitrary folders and staged content before it enters Git, including exports, release artifacts, support bundles, and files copied between systems. Use both layers with access controls, review, and credential rotation.
@@ -246,4 +246,4 @@ No. GitHub and other providers help detect secrets in repository history and aft
 
 Use Node.js 20, 22, or 24. Run `npm test`, `npm run check`, and `node src/cli.js . --fail-on low --no-color` before opening a pull request. Detection tests must construct credential-shaped data at runtime and must assert complete redaction. See [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
 
-The current release is [v0.2.1](https://github.com/6fmh/shareguard-cli/releases/tag/v0.2.1); changes are summarized in [CHANGELOG.md](CHANGELOG.md). ShareGuard is released under the [MIT License](LICENSE).
+The current release is [v0.3.0](https://github.com/6fmh/shareguard-cli/releases/tag/v0.3.0); changes are summarized in [CHANGELOG.md](CHANGELOG.md). ShareGuard is released under the [MIT License](LICENSE).
