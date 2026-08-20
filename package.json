@@ -1,7 +1,7 @@
 {
   "name": "shareguard-cli",
-  "version": "0.2.1",
-  "description": "Zero-runtime-dependency Node.js CLI and GitHub Action for secret detection, PII scanning, and pre-commit security.",
+  "version": "0.3.0",
+  "description": "Zero-runtime-dependency Node.js CLI and GitHub Action that scans code, staged changes, and files for hard-coded secrets, provider API keys, and PII, with SARIF output for pre-commit hooks and CI.",
   "type": "module",
   "bin": {
     "shareguard": "src/cli.js"
@@ -14,7 +14,9 @@
     "security",
     "secrets",
     "secret-scanner",
+    "secret-scanning",
     "secret-detection",
+    "api-key-detection",
     "privacy",
     "pii",
     "cli",

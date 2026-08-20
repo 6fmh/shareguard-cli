@@ -3,7 +3,7 @@ import assert from "node:assert/strict"
 import { rm } from "node:fs/promises"
 import { defaults } from "../src/config.js"
 import { scan } from "../src/scanner.js"
-import { fixture, generated } from "./helpers.js"
+import { fixture, generated, hex } from "./helpers.js"
 
 test("finds secrets without retaining source values or previews", async t => {
   const first = generated("", 40)
@@ -22,6 +22,31 @@ test("finds secrets without retaining source values or previews", async t => {
   assert.equal(result.findings.every(item => item.preview === null), true)
   assert.equal(serialized.includes(first), false)
   assert.equal(serialized.includes(second), false)
+})
+
+test("detects new provider tokens and never retains their values", async t => {
+  // Every credential-shaped value is built at runtime; none appears literally in this file.
+  const tokens = {
+    "openai.txt": generated("sk-proj-", 100),
+    "anthropic.txt": generated("sk-ant-api03-", 90),
+    "google.txt": generated("GOCSPX-", 28),
+    "doppler.txt": generated("dp.st.", 44),
+    "linear.txt": generated("lin_api_", 44),
+    "shopify.txt": `shpat_${hex(32)}`,
+    "grafana.txt": `${generated("glsa_", 32)}_${hex(8)}`
+  }
+  const root = await fixture(Object.fromEntries(Object.entries(tokens).map(([name, value]) => [name, `key = "${value}"\n`])))
+  t.after(() => rm(root, { recursive: true, force: true }))
+
+  const result = await scan({ root, config: defaults, useGitignore: false })
+  const serialized = JSON.stringify(result)
+  const detected = new Set(result.findings.map(item => item.rule))
+
+  for (const rule of ["openai-api-key", "anthropic-api-key", "google-oauth-client-secret", "doppler-token", "linear-api-key", "shopify-token", "grafana-service-account-token"]) {
+    assert.equal(detected.has(rule), true, rule)
+  }
+  assert.equal(result.findings.every(item => item.preview === null), true)
+  for (const value of Object.values(tokens)) assert.equal(serialized.includes(value), false)
 })
 
 test("honors allow rules and rule selection", async t => {

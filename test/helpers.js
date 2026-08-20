@@ -16,3 +16,5 @@ export const generated = (prefix, length) => {
   const alphabet = "Ab3xY7mN2pQr5Tuv8Wz0Cde4Fgh6JkLs"
   return prefix + Array.from({ length }, (_, index) => alphabet[(index * 7 + 3) % alphabet.length]).join("")
 }
+
+export const hex = length => Array.from({ length }, (_, index) => "0123456789abcdef"[(index * 7 + 5) % 16]).join("")

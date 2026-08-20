@@ -9,7 +9,7 @@ import { formatJson, formatSarif, formatText } from "./format.js"
 import { categories, severityRank } from "./rules.js"
 import { scan } from "./scanner.js"
 
-export const version = "0.2.1"
+export const version = "0.3.0"
 
 const help = `ShareGuard ${version}
 
