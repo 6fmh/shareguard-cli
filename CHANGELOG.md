@@ -11,6 +11,12 @@ The latest release is [0.3.0](https://github.com/6fmh/shareguard-cli/releases/ta
 - Provider secret detection for OpenAI, Anthropic, Google OAuth client secrets, Azure client secrets, Slack app tokens and incoming webhook URLs, Discord and Telegram bot tokens, Twilio account and API-key SIDs, HashiCorp Vault, Terraform Cloud, Doppler, Grafana service-account and cloud tokens, Cloudflare, Square, Shopify, Notion, and Linear.
 - Privacy detection for non-documentation IPv6 addresses.
 
+### Fixed
+
+- Passed the release tag and SARIF output path to workflow shells through environment variables instead of expression interpolation, removing a template-injection path.
+- Replaced an uninitialized buffer allocation when decoding big-endian UTF-16 content, which could read stale heap bytes for odd-length input.
+- Resolved finding line numbers with a precomputed line index, eliminating quadratic slowdown on match-dense files.
+
 ### Changed
 
 - Broadened the Stripe rule to cover restricted keys (`rk_live`/`rk_test`) alongside secret keys.

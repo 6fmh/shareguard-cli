@@ -17,8 +17,25 @@ const defaultGitOperations = { getStagedEntries, getObjectSize, readObject }
 
 const normalize = value => value.split(path.sep).join("/")
 const fingerprint = (rule, file, value) => createHash("sha256").update(`${rule}\0${file}\0${value}`).digest("hex").slice(0, 24)
-const lineNumberAt = (content, index) => content.slice(0, index).split("\n").length
 const looksBinary = buffer => buffer.subarray(0, 8000).includes(0)
+
+// Precompute line starts once per file so each finding resolves its line in O(log n)
+// instead of slicing the whole prefix, which is quadratic on match-dense content.
+const createLineLookup = content => {
+  const starts = [0]
+  for (let index = content.indexOf("\n"); index !== -1; index = content.indexOf("\n", index + 1)) starts.push(index + 1)
+
+  return offset => {
+    let low = 0
+    let high = starts.length - 1
+    while (low < high) {
+      const middle = (low + high + 1) >> 1
+      if (starts[middle] <= offset) low = middle
+      else high = middle - 1
+    }
+    return low + 1
+  }
+}
 
 const isAllowed = (finding, allowRules) => allowRules.some(rule => {
   if (rule.rule && rule.rule !== finding.rule) return false
@@ -29,10 +46,11 @@ const isAllowed = (finding, allowRules) => allowRules.some(rule => {
 const decodeText = buffer => {
   if (buffer.length >= 2 && buffer[0] === 0xff && buffer[1] === 0xfe) return new TextDecoder("utf-16le", { fatal: true }).decode(buffer.subarray(2))
   if (buffer.length >= 2 && buffer[0] === 0xfe && buffer[1] === 0xff) {
-    const swapped = Buffer.allocUnsafe(buffer.length - 2)
-    for (let index = 2; index + 1 < buffer.length; index += 2) {
-      swapped[index - 2] = buffer[index + 1]
-      swapped[index - 1] = buffer[index]
+    const pairs = Math.floor((buffer.length - 2) / 2)
+    const swapped = Buffer.alloc(pairs * 2)
+    for (let index = 0; index < pairs; index += 1) {
+      swapped[index * 2] = buffer[3 + index * 2]
+      swapped[index * 2 + 1] = buffer[2 + index * 2]
     }
     return new TextDecoder("utf-16le", { fatal: true }).decode(swapped)
   }
@@ -293,6 +311,7 @@ export const scan = async ({
     }
 
     const secretSpans = []
+    const lineAt = createLineLookup(content)
     for (const rule of contentRules) {
       if (!selected(rule)) continue
       rule.pattern.lastIndex = 0
@@ -306,7 +325,7 @@ export const scan = async ({
         const safeValue = rule.trimPrefix ? value.slice(1) : value
         const end = index + safeValue.length
         if (rule.category === "secret" && secretSpans.some(([start, previousEnd]) => index < previousEnd && end > start)) continue
-        const line = lineNumberAt(content, index)
+        const line = lineAt(index)
         const finding = {
           rule: rule.id,
           category: rule.category,
@@ -339,7 +358,7 @@ export const scan = async ({
           severity: entropyRule.severity,
           description: entropyRule.description,
           file: relative,
-          line: lineNumberAt(content, index),
+          line: lineAt(index),
           preview: null,
           fingerprint: fingerprint(entropyRule.id, relative, value)
         })

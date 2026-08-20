@@ -96,6 +96,35 @@ test("reads UTF-16 text with a byte-order mark", async t => {
   assert.equal(result.findings.some(item => item.rule === "generic-secret"), true)
 })
 
+test("reads big-endian UTF-16 text without exposing uninitialized memory", async t => {
+  const secret = generated("", 40)
+  const little = Buffer.from(`password = "${secret}"`, "utf16le")
+  const big = Buffer.alloc(little.length)
+  for (let index = 0; index + 1 < little.length; index += 2) {
+    big[index] = little[index + 1]
+    big[index + 1] = little[index]
+  }
+  const root = await fixture({ "settings.txt": Buffer.concat([Buffer.from([0xfe, 0xff]), big]) })
+  t.after(() => rm(root, { recursive: true, force: true }))
+
+  const result = await scan({ root, config: defaults, useGitignore: false })
+  const serialized = JSON.stringify(result)
+
+  assert.equal(result.findings.some(item => item.rule === "generic-secret"), true)
+  assert.equal(serialized.includes(secret), false)
+})
+
+test("reports the line number of each finding", async t => {
+  const secret = generated("", 40)
+  const root = await fixture({ "settings.js": `// header\n\nconst blank = 1\npassword = "${secret}"\n` })
+  t.after(() => rm(root, { recursive: true, force: true }))
+
+  const result = await scan({ root, config: defaults, useGitignore: false, includeRules: ["generic-secret"] })
+
+  assert.equal(result.findings.length, 1)
+  assert.equal(result.findings[0].line, 4)
+})
+
 test("warns and skips invalid text encodings", async t => {
   const root = await fixture({ "invalid.txt": Buffer.from([0xc3, 0x28]) })
   t.after(() => rm(root, { recursive: true, force: true }))

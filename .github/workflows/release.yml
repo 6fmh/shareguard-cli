@@ -24,6 +24,7 @@ jobs:
           name: npm-package
           path: "*.tgz"
           if-no-files-found: error
-      - run: gh release upload "${{ github.event.release.tag_name }}" ./*.tgz --clobber
+      - run: gh release upload "$RELEASE_TAG" ./*.tgz --clobber
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
