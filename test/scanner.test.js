@@ -171,3 +171,28 @@ test("flags large files without reading their contents", async t => {
   assert.equal(result.findings[0].rule, "large-file")
   assert.equal(result.stats.skipped, 1)
 })
+
+test("reports risky filenames and ignores their documented samples", async t => {
+  const root = await fixture({
+    "deploy/id_ed25519": "content\n",
+    "deploy/cluster.ovpn": "content\n",
+    "deploy/service-account.json": "{}\n",
+    "deploy/terraform.tfstate": "{}\n",
+    "deploy/notes.txt.bak": "content\n",
+    "deploy/.DS_Store": "content\n",
+    "deploy/.env.example": "TOKEN=replace-me\n",
+    "deploy/app.pem.example": "content\n"
+  })
+  t.after(() => rm(root, { recursive: true, force: true }))
+
+  const result = await scan({ root, config: defaults, useGitignore: false, selectedCategories: ["secret", "hygiene"] })
+  const rules = new Set(result.findings.map(item => item.rule))
+
+  assert.equal(rules.has("private-key-file"), true)
+  assert.equal(rules.has("secret-store-file"), true)
+  assert.equal(rules.has("service-account-key-file"), true)
+  assert.equal(rules.has("infrastructure-state-file"), true)
+  assert.equal(rules.has("backup-file"), true)
+  assert.equal(rules.has("os-metadata-file"), true)
+  assert.equal(result.findings.some(item => item.file.endsWith(".env.example")), false)
+})

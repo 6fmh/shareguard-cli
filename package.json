@@ -1,14 +1,16 @@
 {
   "name": "shareguard-cli",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Zero-runtime-dependency Node.js CLI and GitHub Action that scans code, staged changes, and files for hard-coded secrets, provider API keys, and PII, with SARIF output for pre-commit hooks and CI.",
   "type": "module",
   "bin": {
     "shareguard": "src/cli.js"
   },
   "scripts": {
-    "check": "node --check src/action.js && node --check src/cli.js && node --check src/config.js && node --check src/format.js && node --check src/git.js && node --check src/ignore.js && node --check src/rules.js && node --check src/scanner.js && npm test",
-    "test": "node test/index.js"
+    "check": "node scripts/check.js",
+    "test": "node test/index.js",
+    "docs": "node scripts/generate-docs.js",
+    "selfscan": "node src/cli.js . --fail-on low --no-color"
   },
   "keywords": [
     "security",
@@ -50,6 +52,7 @@
   },
   "files": [
     "src",
+    "docs",
     "action.yml",
     "CHANGELOG.md",
     "README.md",

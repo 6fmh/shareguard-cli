@@ -14,15 +14,17 @@ $ shareguard ./release --fail-on medium
 HIGH     config/settings.js:12
          Hard-coded credential [generic-secret]
 
-1 finding in 24 files (82 kB), 3 skipped, 4 ignored, 0 baselined, 0 errors
+1 finding in 24 files (82 kB), 3 skipped, 4 ignored, 0 suppressed, 0 baselined, 0 errors
 ```
 
 ## Contents
 
 - [Quick start](#quick-start)
 - [Choose a workflow](#choose-a-workflow)
+- [Suppress a reviewed finding](#suppress-a-reviewed-finding)
 - [GitHub Action and SARIF](#github-action-and-sarif)
 - [What ShareGuard detects](#what-shareguard-detects)
+- [Rule reference](#rule-reference)
 - [Output and exit codes](#output-and-exit-codes)
 - [Configuration and baselines](#configuration-and-baselines)
 - [Security and limitations](#security-and-limitations)
@@ -34,7 +36,7 @@ HIGH     config/settings.js:12
 ShareGuard is currently installed from this GitHub repository; no npm registry package is required.
 
 ```sh
-npm install --global github:6fmh/shareguard-cli#v0.3.0
+npm install --global github:6fmh/shareguard-cli#v0.4.0
 shareguard --version
 shareguard . --fail-on high
 ```
@@ -78,6 +80,26 @@ exec shareguard --staged --fail-on high --no-color
 
 The hook requires the `shareguard` command to be on the hook's `PATH`. A normal CI scan should use a checked-out workspace instead of `--staged`, because a fresh checkout has no staged changes.
 
+With the [pre-commit](https://pre-commit.com) framework, add the hook to `.pre-commit-config.yaml` instead:
+
+```yaml
+repos:
+  - repo: https://github.com/6fmh/shareguard-cli
+    rev: v0.4.0
+    hooks:
+      - id: shareguard
+```
+
+### Review only the pull-request diff
+
+`--since <ref>` scans the files added, copied, modified, or renamed since a Git reference, which keeps large repositories fast in pull-request jobs:
+
+```sh
+shareguard . --since origin/main --format github
+```
+
+The reference must resolve to a commit. Files that were deleted after the diff was computed are skipped, and `--since` cannot be combined with `--staged` or `--stdin`.
+
 ### Add a normal CI check
 
 ```yaml
@@ -92,17 +114,56 @@ jobs:
   scan:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: 6fmh/shareguard-cli@v0.3.0
+      - uses: actions/checkout@v7
+      - uses: 6fmh/shareguard-cli@v0.4.0
         with:
           fail-on: high
 ```
 
-Use the versioned `v0.3.0` release tag above, or pin the action to a full commit SHA in a production workflow.
+Use the versioned `v0.4.0` release tag above, or pin the action to a full commit SHA in a production workflow.
+
+## Suppress a reviewed finding
+
+When a finding is intentional and a configuration `allow` entry is too broad, annotate the source instead. Suppression comments work in any text file, because ShareGuard reads them as plain text:
+
+```js
+const contact = "team@example.com" // shareguard-ignore-line email-address
+// shareguard-ignore-next-line generic-secret
+const sample = "password = \"not-a-real-value\""
+```
+
+- `shareguard-ignore-line` and the bare `shareguard-ignore` apply to the line they appear on.
+- `shareguard-ignore-next-line` applies to the following line.
+- `shareguard-ignore-file` applies to the whole file.
+
+List rule identifiers after the directive to keep the rest of the rules active on that line. A directive with no identifier, or with an identifier that does not exist, suppresses every rule, so prefer naming the rule you reviewed. Suppressed findings are removed from every output format and counted in the summary as `suppressed`.
 
 ## GitHub Action and SARIF
 
-The action accepts `path`, `staged`, `fail-on`, `format`, `output`, `config`, and `baseline`. Its `sarif` output is set when `format: sarif` and `output` are both supplied. The action runs ShareGuard in the runner; it does not send source content to a ShareGuard service.
+The action wraps the same CLI and runs it in the runner; it does not send source content to a ShareGuard service. It defaults to `format: github`, so findings appear as inline annotations on the changed files without extra configuration, and it appends a Markdown report to the job summary.
+
+| Input | Default | Purpose |
+| --- | --- | --- |
+| `path` | `.` | File or directory to scan |
+| `staged` | `false` | Scan added and modified files in the Git index |
+| `since` | | Scan only files changed since a Git reference |
+| `fail-on` | `high` | Minimum severity that fails the action, or `none` |
+| `format` | `github` | `text`, `json`, `sarif`, `github`, `markdown`, `csv`, or `junit` |
+| `output` | | File that receives the primary formatted output |
+| `config` | | Custom configuration file |
+| `baseline` | | Baseline file of approved fingerprints |
+| `include-rule` | | Scan only these rule identifiers |
+| `exclude-rule` | | Disable these rule identifiers |
+| `category` | | Scan only these categories |
+| `concurrency` | | Bounded scan concurrency from 1 through 64 |
+| `gitignore` | `true` | Honor `.gitignore` rules |
+| `quiet` | `false` | Print findings without the summary line |
+| `annotations` | `true` | Add inline annotations when the primary format is not `github` |
+| `summary` | `true` | Append a Markdown report to the job summary |
+
+Rule and category inputs accept comma-separated or newline-separated lists. Inputs containing a line break or a leading dash are rejected, so a workflow input cannot inject extra CLI options.
+
+The `exit-code` output always reports the scan result (`0`, `1`, or `2`), and the `sarif` output is set when `format: sarif` and `output` are both supplied.
 
 To publish findings to GitHub code scanning, grant `security-events: write`, keep the scan result available when findings fail the threshold, upload SARIF, then fail the job:
 
@@ -119,16 +180,16 @@ jobs:
   shareguard:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - id: shareguard
         continue-on-error: true
-        uses: 6fmh/shareguard-cli@v0.3.0
+        uses: 6fmh/shareguard-cli@v0.4.0
         with:
           format: sarif
           output: shareguard.sarif
           fail-on: high
       - if: always()
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: ${{ steps.shareguard.outputs.sarif }}
       - if: steps.shareguard.outcome == 'failure'
@@ -141,9 +202,9 @@ SARIF 2.1 locations contain paths and line numbers, rule descriptions, severitie
 
 Rules are grouped into three categories:
 
-- `secret`: private keys; GitHub, GitLab, and AWS credentials; OpenAI, Anthropic, and Google API keys; Google OAuth and Azure client secrets; Slack tokens, app tokens, and webhook URLs; Stripe, npm, SendGrid, DigitalOcean, PyPI, Discord, and Telegram credentials; Twilio account and API-key SIDs; HashiCorp Vault, Terraform Cloud, Doppler, Grafana, Cloudflare, Square, Shopify, Notion, and Linear tokens; JWTs; connection-string passwords; hard-coded credential assignments; and conservative high-entropy credential-like values.
-- `privacy`: email addresses, local Windows and Unix home paths, and non-documentation IPv4 and IPv6 addresses.
-- `hygiene`: risky filenames such as `.env`, private-key files, and credential stores, plus oversized files.
+- `secret`: private keys; GitHub, GitLab, and AWS credentials; OpenAI, Anthropic, Google, OpenRouter, Groq, Hugging Face, Replicate, and Perplexity API keys; Google OAuth, Azure client, and Azure Storage secrets; Slack tokens, app tokens, and webhook URLs; Stripe, npm, RubyGems, Docker Hub, SendGrid, Mailgun, Mailchimp, DigitalOcean, PyPI, Discord, and Telegram credentials; Twilio account and API-key SIDs; HashiCorp Vault, Terraform Cloud, Doppler, Grafana, Cloudflare, Square, Shopify, Notion, Linear, Atlassian, Airtable, Supabase, Postman, Figma, New Relic, SonarQube, and Sentry credentials; JWTs; credentials embedded in URLs and connection strings; risky files such as `.env`, key stores, service-account keys, and Terraform state; hard-coded credential assignments; and conservative high-entropy credential-like values.
+- `privacy`: email addresses, local Windows and Unix home paths, non-documentation IPv4 and IPv6 addresses, Luhn-valid payment card numbers, and US Social Security numbers.
+- `hygiene`: backup and editor temporary files, operating system metadata files, and oversized artifacts.
 
 Provider-side secret scanning remains valuable for repository history and post-push detection. ShareGuard covers the earlier boundary: arbitrary folders and staged content before it enters Git, including exports, release artifacts, support bundles, and files copied between systems. Use both layers with access controls, review, and credential rotation.
 
@@ -155,11 +216,40 @@ shareguard . --exclude-rule email-address
 shareguard . --category secret
 ```
 
-Rule filters can be repeated or supplied as comma-separated values. The CLI lists categories with `shareguard --help`.
+Rule filters can be repeated or supplied as comma-separated values. `shareguard --list-rules` prints every identifier, and [docs/RULES.md](docs/RULES.md) explains each one.
+
+## Rule reference
+
+[docs/RULES.md](docs/RULES.md) documents every rule with its identifier, category, severity, and remediation guidance. It is generated from the rule definitions with `npm run docs`, and SARIF `helpUri` links point at the matching section, so a code-scanning alert links straight to the explanation.
+
+To inspect the rules from a terminal:
+
+```sh
+shareguard --list-rules
+shareguard --list-rules --json
+```
 
 ## Output and exit codes
 
-Text is the default. `--format json` emits the versioned JSON schema, and `--format sarif` emits SARIF 2.1. `--json` and `--sarif` are aliases. `--output <file>` writes the selected format without printing it to standard output.
+Text is the default. `--output <file>` writes the selected format to a file instead of standard output.
+
+| Format | Use |
+| --- | --- |
+| `text` | Human review in a terminal, with color unless `--no-color` is set |
+| `json` | Versioned machine-readable output (`--json` is an alias) |
+| `sarif` | SARIF 2.1 for GitHub code scanning (`--sarif` is an alias) |
+| `github` | Workflow annotations that mark the offending lines in a pull request |
+| `markdown` | A report suited to a job summary, comment, or review note |
+| `csv` | A spreadsheet-safe table, with formula-injection guards |
+| `junit` | JUnit XML for test-report viewers in CI |
+
+One scan can produce several reports. `--report <format>[:<file>]` is repeatable, and without a file the report is printed to standard output:
+
+```sh
+shareguard . --sarif --output shareguard.sarif --report markdown:summary.md --report github
+```
+
+Only one report may be written per destination, and only one report may go to standard output. `--quiet` drops the summary line from text and GitHub output.
 
 | Exit code | Meaning |
 | --- | --- |
@@ -167,7 +257,7 @@ Text is the default. `--format json` emits the versioned JSON schema, and `--for
 | `1` | At least one finding meets `--fail-on`. |
 | `2` | Invalid input, configuration, baseline, Git state, or an unreadable scan target prevented a complete scan. |
 
-The default threshold is `high`. Use `--fail-on low` for a strict privacy or release review, or `--fail-on critical` for a narrower blocking policy. A finding reports only its location, description, rule, severity, and fingerprint. ShareGuard never emits the matched value in text, JSON, SARIF, diagnostics, errors, or baselines.
+The default threshold is `high`. Use `--fail-on low` for a strict privacy or release review, `--fail-on critical` for a narrower blocking policy, or `--fail-on none` to report findings without failing the command. A finding reports only its location, description, rule, severity, and fingerprint. ShareGuard never emits the matched value in text, JSON, SARIF, diagnostics, errors, or baselines.
 
 ## Configuration and baselines
 
@@ -228,7 +318,7 @@ It scans only added and modified paths in the Git index. Stage the intended cont
 
 ### How do I handle a reviewed false positive?
 
-Prefer a narrow `allow` entry matching the rule and path, then keep the reason in code review. Do not disable secret or entropy rules globally just to silence one finding.
+Prefer a narrow `allow` entry matching the rule and path, or an inline `shareguard-ignore-line` comment naming the rule, then keep the reason in code review. Do not disable secret or entropy rules globally just to silence one finding.
 
 ### Why did the command return exit code `2`?
 
@@ -244,6 +334,6 @@ No. GitHub and other providers help detect secrets in repository history and aft
 
 ## Contributing and releases
 
-Use Node.js 20, 22, or 24. Run `npm test`, `npm run check`, and `node src/cli.js . --fail-on low --no-color` before opening a pull request. Detection tests must construct credential-shaped data at runtime and must assert complete redaction. See [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
+Use Node.js 20, 22, or 24. Run `npm run check`, `npm test`, `npm run docs -- --check`, and `npm run selfscan` before opening a pull request. Detection tests must construct credential-shaped data at runtime and must assert complete redaction. See [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
 
-The current release is [v0.3.0](https://github.com/6fmh/shareguard-cli/releases/tag/v0.3.0); changes are summarized in [CHANGELOG.md](CHANGELOG.md). ShareGuard is released under the [MIT License](LICENSE).
+The current release is [v0.4.0](https://github.com/6fmh/shareguard-cli/releases/tag/v0.4.0); changes are summarized in [CHANGELOG.md](CHANGELOG.md). ShareGuard is released under the [MIT License](LICENSE).

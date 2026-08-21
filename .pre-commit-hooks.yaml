@@ -1,0 +1,8 @@
+- id: shareguard
+  name: ShareGuard
+  description: Scan staged changes for secrets, personal information, and risky files
+  entry: shareguard --staged --fail-on high --no-color
+  language: node
+  pass_filenames: false
+  always_run: true
+  stages: [pre-commit]
