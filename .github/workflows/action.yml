@@ -20,4 +20,6 @@ jobs:
           format: sarif
           output: shareguard.sarif
       - run: node -e "const fs = require('node:fs'); const data = JSON.parse(fs.readFileSync('shareguard.sarif')); if (data.version !== '2.1.0') process.exit(1)"
-      - run: test "${{ steps.shareguard.outputs.sarif }}" = "shareguard.sarif"
+      - run: test "$SARIF_OUTPUT" = "shareguard.sarif"
+        env:
+          SARIF_OUTPUT: ${{ steps.shareguard.outputs.sarif }}
