@@ -1,3 +1,4 @@
+import "./action.test.js"
 import "./changed.test.js"
 import "./cli.test.js"
 import "./config.test.js"
