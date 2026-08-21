@@ -10,7 +10,7 @@ The latest release is [0.4.0](https://github.com/6fmh/shareguard-cli/releases/ta
 
 - Secret detection for AWS secret access keys, Azure Storage account keys, RubyGems, Docker Hub, OpenRouter, Groq, Hugging Face, Replicate, Perplexity, Atlassian, Airtable, Supabase, Postman, Figma, New Relic, SonarQube, Sentry DSNs, Mailgun, Mailchimp, and credentials embedded in URLs.
 - Privacy detection for payment card numbers, validated with an issuer prefix and a Luhn check that skips documentation numbers, and for US Social Security numbers with the reserved ranges excluded.
-- File hygiene detection for key and credential stores, service-account key files, Terraform state and variable files, backup or editor temporary files, and operating system metadata files, plus wider private-key and credential-file coverage.
+- Risky-file detection for key and credential stores, service-account key files, and Terraform state and variable files, plus file hygiene detection for backup or editor temporary files and operating system metadata files and wider private-key coverage.
 - `--since <ref>` scans only files changed since a Git reference, so pull-request jobs can review just the diff.
 - Four output formats: `github` workflow annotations, `markdown` summaries, `csv`, and `junit` XML, alongside text, JSON, and SARIF.
 - `--report <format>[:<file>]` emits any number of extra reports from a single scan, so one run can annotate a pull request, write SARIF, and store a Markdown summary.
