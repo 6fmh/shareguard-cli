@@ -104,6 +104,39 @@ test("recovers common credential names and rejects dummy values in the generic r
   assert.equal(matches("generic-secret", 'api_key = os.getenv("REAL_KEY_NAME")'), false)
 })
 
+test("detects personal Windows paths and ignores shared accounts", () => {
+  const separator = String.fromCharCode(92)
+  const local = (drive, ...parts) => [`${drive}:`, ...parts].join(separator)
+  const posix = (drive, ...parts) => [`${drive}:`, ...parts].join("/")
+
+  assert.equal(matches("windows-user-path", local("C", "Users", "alice", "project")), true)
+  assert.equal(matches("windows-user-path", `reading from ${posix("c", "Users", "carol", "notes.txt")}`), true)
+  assert.equal(matches("windows-user-path", local("D", "Users", "dave")), true)
+  assert.equal(matches("windows-user-path", local("C", "Users", "Public", "Documents")), false)
+  assert.equal(matches("windows-user-path", local("C", "Users", "Default", "ntuser.dat")), false)
+  assert.equal(matches("windows-user-path", local("C", "Windows", "System32")), false)
+})
+
+test("stays responsive on adversarial input", () => {
+  const hostile = [
+    `password = "${"a".repeat(200)}`,
+    `${"1.".repeat(400)}1`,
+    `${"a:".repeat(400)}`,
+    `${"eyJ".repeat(200)}.`,
+    `postgres://${"user:".repeat(300)}`,
+    `${"C:\\Users\\".repeat(200)}`
+  ].join("\n")
+  const started = process.hrtime.bigint()
+
+  for (const rule of contentRules) {
+    rule.pattern.lastIndex = 0
+    let guard = 0
+    while (rule.pattern.exec(hostile) !== null && rule.pattern.global && guard++ < 5000) continue
+  }
+
+  assert.equal(Number(process.hrtime.bigint() - started) < 5e9, true)
+})
+
 test("scopes IP address rules to identifying addresses", () => {
   // Assemble addresses at runtime so this test file itself stays clean under a self-scan.
   const v4 = (...octets) => octets.join(".")
@@ -119,4 +152,75 @@ test("scopes IP address rules to identifying addresses", () => {
   assert.equal(matches("ipv6-address", v6("2001", "db8", "", "1")), false)
   assert.equal(matches("ipv6-address", v6("", "", "1")), false)
   assert.equal(matches("ipv6-address", v6("12", "34", "56")), false)
+  assert.equal(matches("ipv6-address", v6("e", "", "C")), false)
+})
+
+test("recognizes platform, AI, and observability credential shapes", () => {
+  const at = String.fromCharCode(64)
+  const credentials = [
+    ["aws-secret-access-key", `aws_secret_access_key = "${generated("", 40)}"`],
+    ["azure-storage-key", `AccountKey=${generated("", 86)}==`],
+    ["rubygems-api-key", `rubygems_${hex(48)}`],
+    ["dockerhub-token", generated("dckr_pat_", 30)],
+    ["openrouter-api-key", `sk-or-v1-${hex(64)}`],
+    ["groq-api-key", generated("gsk_", 52)],
+    ["huggingface-token", generated("hf_", 36)],
+    ["replicate-api-token", generated("r8_", 40)],
+    ["perplexity-api-key", generated("pplx-", 48)],
+    ["atlassian-api-token", generated("ATATT3xFfGF0", 120)],
+    ["airtable-token", `pat${generated("", 14)}.${hex(64)}`],
+    ["supabase-token", `sbp_${hex(40)}`],
+    ["postman-api-key", `PMAK-${hex(24)}-${hex(34)}`],
+    ["figma-token", generated("figd_", 48)],
+    ["new-relic-key", generated("NRAK-", 27)],
+    ["sonarqube-token", `sqp_${hex(40)}`],
+    ["sentry-dsn", ["https://", hex(40), at, "o4501.ingest.us.sentry.io/12345"].join("")],
+    ["mailgun-api-key", `key-${hex(32)}`],
+    ["mailchimp-api-key", `${hex(32)}-us14`],
+    ["url-basic-auth", ["https://service:", generated("", 24), at, "internal.example/api"].join("")]
+  ]
+
+  for (const [rule, credential] of credentials) assert.equal(matches(rule, credential), true, rule)
+})
+
+test("keeps platform rules quiet on placeholders", () => {
+  assert.equal(matches("openrouter-api-key", "sk-or-v1-YOUR_KEY_HERE"), false)
+  assert.equal(matches("huggingface-token", "hf_xxxxxxxx"), false)
+  assert.equal(matches("mailgun-api-key", "key-your-mailgun-key"), false)
+  assert.equal(matches("supabase-token", "sbp_token"), false)
+  assert.equal(matches("url-basic-auth", ["https://service:", "changeme", String.fromCharCode(64), "internal.example"].join("")), false)
+  assert.equal(matches("aws-secret-access-key", 'aws_secret_access_key = "REPLACE_WITH_YOUR_SECRET_ACCESS_KEY_X"'), false)
+})
+
+test("reports payment cards and identifiers only when their checks pass", () => {
+  const withCheckDigit = digits => {
+    let sum = 0
+    let double = true
+    for (let index = digits.length - 1; index >= 0; index -= 1) {
+      let value = digits.charCodeAt(index) - 48
+      if (double) {
+        value *= 2
+        if (value > 9) value -= 9
+      }
+      sum += value
+      double = !double
+    }
+    return `${digits}${(10 - (sum % 10)) % 10}`
+  }
+
+  const card = withCheckDigit(Array.from({ length: 15 }, (_, index) => (index * 7 + 4) % 10).join(""))
+  const mistyped = `${card.slice(0, -1)}${(Number(card.slice(-1)) + 5) % 10}`
+  const spaced = card.match(/.{1,4}/g).join(" ")
+  const documentation = `4${"1".repeat(15)}`
+  const identifier = (area, group, serial) => [area, group, serial].join("-")
+
+  assert.equal(matches("credit-card-number", card), true)
+  assert.equal(matches("credit-card-number", spaced), true)
+  assert.equal(matches("credit-card-number", mistyped), false)
+  assert.equal(matches("credit-card-number", documentation), false)
+  assert.equal(matches("credit-card-number", "8".repeat(16)), false)
+  assert.equal(matches("us-social-security-number", identifier(123, 45, 6789)), true)
+  assert.equal(matches("us-social-security-number", identifier("000", 45, 6789)), false)
+  assert.equal(matches("us-social-security-number", identifier(666, 45, 6789)), false)
+  assert.equal(matches("us-social-security-number", identifier(912, "00", 6789)), false)
 })

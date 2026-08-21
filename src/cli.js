@@ -5,11 +5,15 @@ import path from "node:path"
 import process from "node:process"
 import { fileURLToPath } from "node:url"
 import { configSchemaVersion, loadBaseline, loadConfig, starterConfig } from "./config.js"
-import { formatJson, formatSarif, formatText } from "./format.js"
-import { categories, severityRank } from "./rules.js"
+import { formatCsv, formatGithub, formatJson, formatJunit, formatMarkdown, formatSarif, formatText } from "./format.js"
+import { allRules, categories, severityRank } from "./rules.js"
 import { scan } from "./scanner.js"
 
-export const version = "0.3.0"
+export const version = "0.4.0"
+
+export const formats = ["text", "json", "sarif", "github", "markdown", "csv", "junit"]
+
+const failOnValues = [...Object.keys(severityRank), "none"]
 
 const help = `ShareGuard ${version}
 
@@ -20,31 +24,41 @@ Usage:
   shareguard init [path] [--force]
 
 Scan options:
-  --staged                  Scan added and modified files in the Git index
-  --stdin                   Read content from standard input
-  --stdin-filename <path>   Set the reported path for standard input
-  --format <format>         Print text, json, or sarif
-  --json                    Alias for --format json
-  --sarif                   Alias for --format sarif
-  --output <file>           Write formatted output to a file
-  --config <file>           Use a custom configuration file
-  --baseline <file>         Ignore known finding fingerprints
-  --write-baseline <file>   Save all current finding fingerprints
-  --include-rule <id>       Scan only a rule, repeatable
-  --exclude-rule <id>       Disable a rule, repeatable
-  --category <name>         Scan only a category, repeatable
-  --concurrency <count>     Override bounded scan concurrency
-  --fail-on <severity>      Exit 1 at low, medium, high, or critical
-  --no-gitignore            Do not use .gitignore rules
-  --no-color                Disable terminal colors
-  --version                 Print the version
-  --help                    Print this help
+  --staged                    Scan added and modified files in the Git index
+  --since <ref>               Scan files changed since a Git reference
+  --stdin                     Read content from standard input
+  --stdin-filename <path>     Set the reported path for standard input
+  --format <format>           Print ${formats.join(", ")}
+  --json                      Alias for --format json
+  --sarif                     Alias for --format sarif
+  --output <file>             Write formatted output to a file
+  --report <format>[:<file>]  Emit an extra report, repeatable
+  --config <file>             Use a custom configuration file
+  --baseline <file>           Ignore known finding fingerprints
+  --write-baseline <file>     Save all current finding fingerprints
+  --include-rule <id>         Scan only a rule, repeatable
+  --exclude-rule <id>         Disable a rule, repeatable
+  --category <name>           Scan only a category, repeatable
+  --concurrency <count>       Override bounded scan concurrency
+  --fail-on <severity>        Exit 1 at low, medium, high, critical, or none
+  --no-gitignore              Do not use .gitignore rules
+  --no-color                  Disable terminal colors
+  --quiet                     Print findings without the summary
+  --list-rules                Print every rule and exit
+  --version                   Print the version
+  --help                      Print this help
 
 Categories: ${categories.join(", ")}
+
+Inline suppression:
+  shareguard-ignore-line, shareguard-ignore-next-line, and shareguard-ignore-file
+  comments skip every rule, or only the rule identifiers listed after them.
 
 Examples:
   shareguard . --fail-on medium
   shareguard --staged --format sarif --output shareguard.sarif
+  shareguard . --since origin/main --format github
+  shareguard . --sarif --output out.sarif --report markdown:summary.md
   shareguard --stdin --stdin-filename config.txt
   shareguard init`
 
@@ -56,6 +70,15 @@ const readValue = (args, index, option) => {
 
 const addValues = (target, value) => {
   for (const item of value.split(",").map(part => part.trim()).filter(Boolean)) target.push(item)
+}
+
+const parseReport = value => {
+  const separator = value.indexOf(":")
+  const format = (separator === -1 ? value : value.slice(0, separator)).trim().toLowerCase()
+  const file = separator === -1 ? undefined : value.slice(separator + 1).trim()
+  if (!formats.includes(format)) throw new Error(`--report format must be ${formats.join(", ")}`)
+  if (separator !== -1 && !file) throw new Error("--report requires a file path after the format")
+  return { format, file }
 }
 
 export const parseArgs = args => {
@@ -70,7 +93,8 @@ export const parseArgs = args => {
     failOn: "high",
     includeRules: [],
     excludeRules: [],
-    selectedCategories: []
+    selectedCategories: [],
+    reports: []
   }
   let hasRoot = false
 
@@ -79,22 +103,31 @@ export const parseArgs = args => {
 
     if (argument === "--json") {
       options.format = "json"
+      options.formatGiven = true
       options.json = true
-    } else if (argument === "--sarif") options.format = "sarif"
-    else if (argument === "--staged") options.staged = true
+    } else if (argument === "--sarif") {
+      options.format = "sarif"
+      options.formatGiven = true
+    } else if (argument === "--staged") options.staged = true
     else if (argument === "--stdin") options.stdin = true
     else if (argument === "--force") options.force = true
     else if (argument === "--no-color") options.color = false
     else if (argument === "--no-gitignore") options.useGitignore = false
+    else if (argument === "--quiet" || argument === "-q") options.quiet = true
+    else if (argument === "--list-rules") options.listRules = true
     else if (argument === "--help" || argument === "-h") options.help = true
     else if (argument === "--version" || argument === "-v") options.version = true
     else if (argument === "--config") options.config = readValue(values, index++, argument)
     else if (argument === "--baseline") options.baseline = readValue(values, index++, argument)
     else if (argument === "--write-baseline") options.writeBaseline = readValue(values, index++, argument)
     else if (argument === "--output") options.output = readValue(values, index++, argument)
+    else if (argument === "--since") options.since = readValue(values, index++, argument)
     else if (argument === "--stdin-filename") options.stdinFilename = readValue(values, index++, argument)
-    else if (argument === "--format") options.format = readValue(values, index++, argument).toLowerCase()
-    else if (argument === "--fail-on") options.failOn = readValue(values, index++, argument).toLowerCase()
+    else if (argument === "--report") options.reports.push(parseReport(readValue(values, index++, argument)))
+    else if (argument === "--format") {
+      options.format = readValue(values, index++, argument).toLowerCase()
+      options.formatGiven = true
+    } else if (argument === "--fail-on") options.failOn = readValue(values, index++, argument).toLowerCase()
     else if (argument === "--concurrency") options.concurrency = Number(readValue(values, index++, argument))
     else if (argument === "--include-rule") addValues(options.includeRules, readValue(values, index++, argument))
     else if (argument === "--exclude-rule") addValues(options.excludeRules, readValue(values, index++, argument))
@@ -107,17 +140,67 @@ export const parseArgs = args => {
     }
   }
 
-  if (!severityRank[options.failOn]) throw new Error("--fail-on must be low, medium, high, or critical")
-  if (!["text", "json", "sarif"].includes(options.format)) throw new Error("--format must be text, json, or sarif")
+  if (!failOnValues.includes(options.failOn)) throw new Error(`--fail-on must be ${failOnValues.join(", ")}`)
+  if (!formats.includes(options.format)) throw new Error(`--format must be ${formats.join(", ")}`)
   if (options.concurrency !== undefined && (!Number.isSafeInteger(options.concurrency) || options.concurrency < 1 || options.concurrency > 64)) throw new Error("--concurrency must be an integer from 1 to 64")
   if (options.stdin && options.staged) throw new Error("--stdin and --staged cannot be used together")
+  if (options.since !== undefined && options.staged) throw new Error("--since and --staged cannot be used together")
+  if (options.since !== undefined && options.stdin) throw new Error("--since and --stdin cannot be used together")
   if (options.stdin && hasRoot) throw new Error("A scan path cannot be used with --stdin")
   if (options.stdinFilename && !options.stdin) throw new Error("--stdin-filename requires --stdin")
   if (command === "scan" && options.force) throw new Error("--force can only be used with init")
-  if (command === "init" && ([options.staged, options.stdin, options.config, options.baseline, options.writeBaseline, options.output].some(Boolean) || options.format !== "text")) throw new Error("init only accepts a path and --force")
-  if (command === "init" && (options.failOn !== "high" || !options.useGitignore || options.concurrency !== undefined)) throw new Error("init only accepts a path and --force")
-  if (command === "init" && (options.includeRules.length > 0 || options.excludeRules.length > 0 || options.selectedCategories.length > 0)) throw new Error("init does not accept rule filters")
+  if (command === "init") {
+    const scanOnly = [
+      options.staged, options.stdin, options.stdinFilename, options.config, options.baseline, options.writeBaseline,
+      options.output, options.since !== undefined, options.quiet, options.listRules, options.formatGiven,
+      options.reports.length > 0, options.concurrency !== undefined, !options.useGitignore, options.failOn !== "high",
+      options.includeRules.length > 0, options.excludeRules.length > 0, options.selectedCategories.length > 0
+    ]
+    if (scanOnly.some(Boolean)) throw new Error("init only accepts a path and --force")
+  }
   return options
+}
+
+export const resolveReports = options => {
+  const reports = []
+  if (options.reports.length === 0 || options.formatGiven || options.output !== undefined) {
+    reports.push({ format: options.format, file: options.output })
+  }
+  reports.push(...options.reports)
+
+  const destinations = new Set()
+  for (const report of reports) {
+    if (report.file === undefined) continue
+    const resolved = path.resolve(report.file)
+    if (destinations.has(resolved)) throw new Error("Each report must write to a different file")
+    destinations.add(resolved)
+  }
+  return reports
+}
+
+const render = (format, result, options) => {
+  if (format === "json") return formatJson(result)
+  if (format === "sarif") return formatSarif(result, version)
+  if (format === "github") return formatGithub(result, options)
+  if (format === "markdown") return formatMarkdown(result)
+  if (format === "csv") return formatCsv(result)
+  if (format === "junit") return formatJunit(result, version)
+  return formatText(result, options)
+}
+
+const listRules = (options, stdout) => {
+  const rules = allRules
+    .map(rule => ({ id: rule.id, category: rule.category, severity: rule.severity, description: rule.description }))
+    .sort((first, second) => first.category.localeCompare(second.category) || first.id.localeCompare(second.id))
+
+  if (options.format === "json") {
+    stdout.write(`${JSON.stringify({ schemaVersion: 1, rules }, null, 2)}\n`)
+    return 0
+  }
+
+  const width = Math.max(...rules.map(rule => rule.id.length))
+  for (const rule of rules) stdout.write(`${rule.id.padEnd(width)}  ${rule.category.padEnd(7)}  ${rule.severity.padEnd(8)}  ${rule.description}\n`)
+  return 0
 }
 
 const readStdin = async stream => {
@@ -165,8 +248,10 @@ export const run = async (args = process.argv.slice(2), io = { stdin: process.st
     io.stdout.write(`${version}\n`)
     return 0
   }
+  if (options.listRules) return listRules(options, io.stdout)
   if (options.command === "init") return initialize(options, io.stdout)
 
+  const reports = resolveReports(options)
   const root = path.resolve(options.root)
   const configRoot = await findConfigRoot(root)
   let config = await loadConfig(configRoot, options.config)
@@ -179,6 +264,7 @@ export const run = async (args = process.argv.slice(2), io = { stdin: process.st
     useGitignore: options.useGitignore,
     baseline,
     staged: options.staged,
+    since: options.since,
     stdinContent,
     stdinFilename: options.stdinFilename,
     includeRules: options.includeRules,
@@ -200,16 +286,21 @@ export const run = async (args = process.argv.slice(2), io = { stdin: process.st
     }
   }
 
-  const output = options.format === "json" ? formatJson(result) : options.format === "sarif" ? formatSarif(result, version) : formatText(result, options)
-  if (options.output) {
-    try {
-      await writeFile(path.resolve(options.output), `${output}\n`, "utf8")
-    } catch {
-      throw new Error("Could not write output")
+  for (const report of reports) {
+    const output = render(report.format, result, options)
+    if (report.file === undefined) {
+      io.stdout.write(`${output}\n`)
+      continue
     }
-  } else io.stdout.write(`${output}\n`)
+    try {
+      await writeFile(path.resolve(report.file), `${output}\n`, "utf8")
+    } catch {
+      throw new Error(`Could not write ${report.format} output`)
+    }
+  }
 
   if (result.stats.errors > 0) return 2
+  if (options.failOn === "none") return 0
   return result.findings.some(item => severityRank[item.severity] >= severityRank[options.failOn]) ? 1 : 0
 }
 

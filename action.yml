@@ -10,29 +10,62 @@ inputs:
     required: false
     default: .
   staged:
-    description: Scan only staged Git changes
+    description: Scan only added and modified files in the Git index
     required: false
     default: "false"
+  since:
+    description: Scan only files changed since a Git reference
+    required: false
   fail-on:
-    description: Minimum severity that fails the action
+    description: Minimum severity that fails the action (low, medium, high, critical, none)
     required: false
     default: high
   format:
-    description: Output format
+    description: Primary output format (text, json, sarif, github, markdown, csv, junit)
     required: false
-    default: text
+    default: github
   output:
-    description: File to receive formatted output
+    description: File to receive the primary formatted output
     required: false
   config:
     description: Custom configuration file
     required: false
   baseline:
-    description: Baseline file
+    description: Baseline file of approved finding fingerprints
     required: false
+  include-rule:
+    description: Scan only these rule identifiers, comma or newline separated
+    required: false
+  exclude-rule:
+    description: Disable these rule identifiers, comma or newline separated
+    required: false
+  category:
+    description: Scan only these categories, comma or newline separated
+    required: false
+  concurrency:
+    description: Bounded scan concurrency from 1 through 64
+    required: false
+  gitignore:
+    description: Honor .gitignore rules
+    required: false
+    default: "true"
+  quiet:
+    description: Print findings without the summary line
+    required: false
+    default: "false"
+  annotations:
+    description: Add inline GitHub annotations when the primary format is not github
+    required: false
+    default: "true"
+  summary:
+    description: Append a Markdown report to the job summary
+    required: false
+    default: "true"
 outputs:
   sarif:
     description: Output file path when format is sarif and output is set
+  exit-code:
+    description: Exit code of the scan (0 clean, 1 findings met the threshold, 2 scan error)
 runs:
   using: node24
   main: src/action.js

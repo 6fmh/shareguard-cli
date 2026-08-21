@@ -4,22 +4,64 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: action-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
-  run:
+  sarif:
+    name: sarif and code scanning
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - id: shareguard
+        continue-on-error: true
         uses: ./
         with:
           fail-on: low
           format: sarif
           output: shareguard.sarif
-      - run: node -e "const fs = require('node:fs'); const data = JSON.parse(fs.readFileSync('shareguard.sarif')); if (data.version !== '2.1.0') process.exit(1)"
-      - run: test "$SARIF_OUTPUT" = "shareguard.sarif"
+      - name: Verify SARIF and action outputs
+        run: |
+          node -e "const data = require('node:fs').readFileSync('shareguard.sarif', 'utf8'); const report = JSON.parse(data); if (report.version !== '2.1.0') process.exit(1); if (!report.runs[0].tool.driver.semanticVersion) process.exit(1)"
+          test "$SARIF_OUTPUT" = "shareguard.sarif"
+          test "$EXIT_CODE" = "0"
+          grep -q "## ShareGuard" "$GITHUB_STEP_SUMMARY"
         env:
           SARIF_OUTPUT: ${{ steps.shareguard.outputs.sarif }}
+          EXIT_CODE: ${{ steps.shareguard.outputs.exit-code }}
+      - name: Upload SARIF to code scanning
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v4.37.8
+        with:
+          sarif_file: shareguard.sarif
+          category: shareguard
+
+  inputs:
+    name: rule and category inputs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./
+        with:
+          path: src
+          fail-on: none
+          format: markdown
+          output: shareguard.md
+          category: secret
+          exclude-rule: high-entropy-secret
+          concurrency: 4
+          summary: false
+      - run: grep -q "## ShareGuard" shareguard.md

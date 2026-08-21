@@ -2,9 +2,10 @@ import { createHash } from "node:crypto"
 import { lstat, readdir, readFile } from "node:fs/promises"
 import path from "node:path"
 import { loadGitignore } from "./config.js"
-import { getObjectSize, getStagedEntries, readObject } from "./git.js"
+import { getChangedFiles, getObjectSize, getStagedEntries, readObject } from "./git.js"
 import { createIgnoreMatcher, globToRegex } from "./ignore.js"
-import { contentRules, entropyRule, resolveRuleSelection, riskyFileRules } from "./rules.js"
+import { contentRules, entropyRule, largeFileRule, resolveRuleSelection, riskyFileRules } from "./rules.js"
+import { createSuppressions } from "./suppress.js"
 
 const binaryExtensions = new Set([
   ".7z", ".avi", ".bmp", ".class", ".dll", ".doc", ".docx", ".eot", ".exe", ".gif", ".gz",
@@ -13,7 +14,7 @@ const binaryExtensions = new Set([
   ".xlsx", ".zip"
 ])
 
-const defaultGitOperations = { getStagedEntries, getObjectSize, readObject }
+const defaultGitOperations = { getStagedEntries, getObjectSize, readObject, getChangedFiles }
 
 const normalize = value => value.split(path.sep).join("/")
 const fingerprint = (rule, file, value) => createHash("sha256").update(`${rule}\0${file}\0${value}`).digest("hex").slice(0, 24)
@@ -194,12 +195,50 @@ const collectStagedEntries = async (root, ignored, stats, diagnostics, concurren
   return entries
 }
 
+const collectChangedEntries = async (root, reference, ignored, stats, diagnostics, gitOperations) => {
+  const changed = await gitOperations.getChangedFiles(root, reference)
+  const entries = []
+
+  for (const relative of changed.files) {
+    if (!relative) continue
+    if (ignored(relative)) {
+      stats.ignored += 1
+      continue
+    }
+
+    const absolute = path.join(root, relative)
+    try {
+      const fileStats = await lstat(absolute)
+      if (fileStats.isSymbolicLink()) {
+        stats.skipped += 1
+        stats.symlinks += 1
+        continue
+      }
+      if (!fileStats.isFile()) {
+        stats.skipped += 1
+        continue
+      }
+      entries.push({ relative, size: fileStats.size, read: () => readFile(absolute) })
+    } catch (error) {
+      if (error.code === "ENOENT") {
+        stats.skipped += 1
+        continue
+      }
+      diagnostics.push(createDiagnostic("unreadable-file", relative))
+      stats.errors += 1
+    }
+  }
+
+  return entries
+}
+
 export const scan = async ({
   root,
   config,
   useGitignore = true,
   baseline = new Set(),
   staged = false,
+  since,
   stdinContent,
   stdinFilename = "stdin",
   includeRules = [],
@@ -222,7 +261,7 @@ export const scan = async ({
   const findings = []
   const diagnostics = []
   const baselineEntries = new Map()
-  const stats = { files: 0, bytes: 0, skipped: 0, ignored: 0, symlinks: 0, errors: 0, baselined: 0 }
+  const stats = { files: 0, bytes: 0, skipped: 0, ignored: 0, symlinks: 0, suppressed: 0, errors: 0, baselined: 0 }
 
   const add = finding => {
     if (isAllowed(finding, config.allow)) return false
@@ -244,6 +283,9 @@ export const scan = async ({
   } else if (staged) {
     entries = await collectStagedEntries(absoluteRoot, createIgnoreMatcher(config.ignore), stats, diagnostics, config.concurrency, gitOperations)
     input = "staged"
+  } else if (since !== undefined) {
+    entries = await collectChangedEntries(absoluteRoot, since, ignored, stats, diagnostics, gitOperations)
+    input = "changed"
   } else {
     entries = await collectFilesystemEntries(absoluteRoot, ignored, stats, diagnostics)
     input = "filesystem"
@@ -269,13 +311,12 @@ export const scan = async ({
       }
     }
 
-    const largeRule = { id: "large-file", category: "hygiene" }
-    if (selected(largeRule) && entry.size > config.largeFileSize) {
+    if (selected(largeFileRule) && entry.size > config.largeFileSize) {
       add({
-        rule: "large-file",
-        category: "hygiene",
-        severity: "medium",
-        description: `Large file (${(entry.size / 1_000_000).toFixed(1)} MB)`,
+        rule: largeFileRule.id,
+        category: largeFileRule.category,
+        severity: largeFileRule.severity,
+        description: `${largeFileRule.description} (${(entry.size / 1_000_000).toFixed(1)} MB)`,
         file: relative,
         line: null,
         preview: null,
@@ -312,6 +353,7 @@ export const scan = async ({
 
     const secretSpans = []
     const lineAt = createLineLookup(content)
+    const suppressed = createSuppressions(content)
     for (const rule of contentRules) {
       if (!selected(rule)) continue
       rule.pattern.lastIndex = 0
@@ -326,6 +368,11 @@ export const scan = async ({
         const end = index + safeValue.length
         if (rule.category === "secret" && secretSpans.some(([start, previousEnd]) => index < previousEnd && end > start)) continue
         const line = lineAt(index)
+        if (suppressed?.(rule.id, line)) {
+          stats.suppressed += 1
+          if (rule.category === "secret") secretSpans.push([index, end])
+          continue
+        }
         const finding = {
           rule: rule.id,
           category: rule.category,
@@ -352,13 +399,18 @@ export const scan = async ({
         const lineStart = content.lastIndexOf("\n", index - 1) + 1
         const context = content.slice(lineStart, index)
         if (!isEntropyCandidate(value, config.entropy.threshold, context)) continue
+        const line = lineAt(index)
+        if (suppressed?.(entropyRule.id, line)) {
+          stats.suppressed += 1
+          continue
+        }
         add({
           rule: entropyRule.id,
           category: entropyRule.category,
           severity: entropyRule.severity,
           description: entropyRule.description,
           file: relative,
-          line: lineAt(index),
+          line,
           preview: null,
           fingerprint: fingerprint(entropyRule.id, relative, value)
         })

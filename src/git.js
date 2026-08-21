@@ -31,10 +31,18 @@ const parseIndex = value => {
   return entries
 }
 
-export const getStagedEntries = async (root, run = git) => {
+const resolveScope = async (root, run) => {
   const repositoryRoot = (await run(root, ["rev-parse", "--show-toplevel"])).trim()
   const prefix = normalize(path.relative(repositoryRoot, path.resolve(root)))
   if (prefix.startsWith("../") || path.isAbsolute(prefix)) throw new Error("Scan path is outside the Git repository")
+  return { repositoryRoot, prefix }
+}
+
+const withinScope = (prefix, repoRelative) => !prefix || repoRelative === prefix || repoRelative.startsWith(`${prefix}/`)
+const stripPrefix = (prefix, repoRelative) => prefix ? repoRelative.slice(prefix.length + 1) : repoRelative
+
+export const getStagedEntries = async (root, run = git) => {
+  const { repositoryRoot, prefix } = await resolveScope(root, run)
 
   const names = (await run(repositoryRoot, ["diff", "--cached", "--name-only", "--diff-filter=ACMR", "-z"]))
     .split("\0")
@@ -43,17 +51,30 @@ export const getStagedEntries = async (root, run = git) => {
   const entries = []
 
   for (const repoRelative of names) {
-    if (prefix && repoRelative !== prefix && !repoRelative.startsWith(`${prefix}/`)) continue
+    if (!withinScope(prefix, repoRelative)) continue
     const indexed = index.get(repoRelative)
     if (!indexed) continue
-    entries.push({
-      relative: prefix ? repoRelative.slice(prefix.length + 1) : repoRelative,
-      repoRelative,
-      ...indexed
-    })
+    entries.push({ relative: stripPrefix(prefix, repoRelative), repoRelative, ...indexed })
   }
 
   return { repositoryRoot, entries }
+}
+
+export const getChangedFiles = async (root, reference, run = git) => {
+  if (typeof reference !== "string" || reference.length === 0 || reference.startsWith("-")) throw new Error("Invalid Git reference")
+  const { repositoryRoot, prefix } = await resolveScope(root, run)
+
+  try {
+    await run(repositoryRoot, ["rev-parse", "--verify", "--quiet", `${reference}^{commit}`])
+  } catch {
+    throw new Error(`Git reference could not be resolved: ${reference}`)
+  }
+
+  const names = (await run(repositoryRoot, ["diff", "--name-only", "--diff-filter=ACMR", "-z", reference, "--"]))
+    .split("\0")
+    .filter(Boolean)
+
+  return { repositoryRoot, files: names.filter(name => withinScope(prefix, name)).map(name => stripPrefix(prefix, name)) }
 }
 
 export const getObjectSize = async (repositoryRoot, object, run = git) => {

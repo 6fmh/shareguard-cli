@@ -2,22 +2,7 @@ import test from "node:test"
 import assert from "node:assert/strict"
 import { readFile, rm } from "node:fs/promises"
 import path from "node:path"
-import { Readable } from "node:stream"
-import { run } from "../src/cli.js"
-import { fixture, generated } from "./helpers.js"
-
-const runCli = async (args, options = {}) => {
-  let stdout = ""
-  const io = {
-    stdin: Readable.from(options.input === undefined ? [] : [Buffer.from(options.input)]),
-    stdout: { write: value => { stdout += value } }
-  }
-  try {
-    return { status: await run(args, io), stdout, stderr: "" }
-  } catch (error) {
-    return { status: 2, stdout, stderr: error.message }
-  }
-}
+import { fixture, generated, runCli } from "./helpers.js"
 
 test("scans stdin with stable JSON and complete redaction", async () => {
   const secret = generated("", 40)

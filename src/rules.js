@@ -1,5 +1,6 @@
 const secret = "secret"
 const privacy = "privacy"
+const hygiene = "hygiene"
 
 const placeholderValues = new Set([
   "changeme", "change-me", "change-this", "changeit", "example", "example-value", "placeholder",
@@ -22,6 +23,41 @@ export const isPlaceholder = value => {
 }
 
 const hasCredentialValue = value => !isPlaceholder(value) && value.length >= 12
+const hasUrlCredentialValue = value => !isPlaceholder(value) && value.length >= 8
+
+const sharedWindowsAccounts = /[\\/](?:public|default|defaultuser\d*|all|administrator|guest)$/i
+
+const documentationCards = new Set([
+  "4111111111111111", "4012888888881881", "4222222222222", "4000000000000002", "4242424242424242",
+  "5555555555554444", "5105105105105100", "5200828282828210", "5555341244441115", "2223003122003222",
+  "378282246310005", "371449635398431", "378734493671000", "6011111111111117", "6011000990139424",
+  "30569309025904", "38520000023237", "3530111333300000", "3566002020360505"
+])
+
+const cardIssuer = /^(?:4|5[1-5]|2[2-7]|3[47]|30[0-5]|3[689]|35|6011|64[4-9]|65)/
+
+const passesLuhn = digits => {
+  let sum = 0
+  let double = false
+  for (let index = digits.length - 1; index >= 0; index -= 1) {
+    let value = digits.charCodeAt(index) - 48
+    if (double) {
+      value *= 2
+      if (value > 9) value -= 9
+    }
+    sum += value
+    double = !double
+  }
+  return sum % 10 === 0
+}
+
+const isPaymentCard = value => {
+  const digits = value.replace(/[ -]/g, "")
+  if (digits.length < 13 || digits.length > 19) return false
+  if (!cardIssuer.test(digits) || documentationCards.has(digits)) return false
+  if (/^(\d)\1+$/.test(digits)) return false
+  return passesLuhn(digits)
+}
 
 export const contentRules = [
   {
@@ -29,7 +65,7 @@ export const contentRules = [
     category: secret,
     severity: "critical",
     description: "Private key material",
-    pattern: /-----BEGIN (?:RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----/g
+    pattern: /-----BEGIN (?:RSA |EC |OPENSSH |DSA |PGP |ENCRYPTED |SSH2 ENCRYPTED )?PRIVATE KEY(?: BLOCK)?-----/g
   },
   {
     id: "github-token",
@@ -51,6 +87,24 @@ export const contentRules = [
     severity: "critical",
     description: "AWS access key ID",
     pattern: /\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/g
+  },
+  {
+    id: "aws-secret-access-key",
+    category: secret,
+    severity: "critical",
+    description: "AWS secret access key",
+    pattern: /\baws[_-]?secret[_-]?access[_-]?key\b["']?\s*[:=]\s*["']?([A-Za-z0-9/+=]{40})(?![A-Za-z0-9/+=])/gi,
+    valueGroup: 1,
+    validate: hasCredentialValue
+  },
+  {
+    id: "azure-storage-key",
+    category: secret,
+    severity: "critical",
+    description: "Azure Storage account key",
+    pattern: /\bAccountKey\s*=\s*([A-Za-z0-9+/]{86}==)/g,
+    valueGroup: 1,
+    validate: hasCredentialValue
   },
   {
     id: "slack-token",
@@ -95,6 +149,20 @@ export const contentRules = [
     pattern: /\bpypi-AgEIcHlwaS5vcmc[A-Za-z0-9_-]{50,}\b/g
   },
   {
+    id: "rubygems-api-key",
+    category: secret,
+    severity: "high",
+    description: "RubyGems API key",
+    pattern: /\brubygems_[0-9a-f]{48}\b/g
+  },
+  {
+    id: "dockerhub-token",
+    category: secret,
+    severity: "high",
+    description: "Docker Hub personal access token",
+    pattern: /\bdckr_pat_[A-Za-z0-9_-]{20,64}(?![A-Za-z0-9_-])/g
+  },
+  {
     id: "google-api-key",
     category: secret,
     severity: "high",
@@ -116,6 +184,41 @@ export const contentRules = [
     pattern: /\bsk-(?:proj|svcacct|admin)-[A-Za-z0-9_-]{20,}\b|\bsk-[A-Za-z0-9]{20}T3BlbkFJ[A-Za-z0-9]{20}\b/g
   },
   {
+    id: "openrouter-api-key",
+    category: secret,
+    severity: "critical",
+    description: "OpenRouter API key",
+    pattern: /\bsk-or-v1-[0-9a-f]{64}\b/g
+  },
+  {
+    id: "groq-api-key",
+    category: secret,
+    severity: "critical",
+    description: "Groq API key",
+    pattern: /\bgsk_[A-Za-z0-9]{40,64}\b/g
+  },
+  {
+    id: "huggingface-token",
+    category: secret,
+    severity: "high",
+    description: "Hugging Face access token",
+    pattern: /\bhf_[A-Za-z0-9]{32,40}\b/g
+  },
+  {
+    id: "replicate-api-token",
+    category: secret,
+    severity: "high",
+    description: "Replicate API token",
+    pattern: /\br8_[A-Za-z0-9]{35,45}\b/g
+  },
+  {
+    id: "perplexity-api-key",
+    category: secret,
+    severity: "high",
+    description: "Perplexity API key",
+    pattern: /\bpplx-[A-Za-z0-9]{32,64}\b/g
+  },
+  {
     id: "google-oauth-client-secret",
     category: secret,
     severity: "critical",
@@ -128,6 +231,13 @@ export const contentRules = [
     severity: "high",
     description: "Azure client secret",
     pattern: /[A-Za-z0-9_~.]{3}[0-9A-Za-z]Q~[A-Za-z0-9_.~-]{31,34}/g
+  },
+  {
+    id: "atlassian-api-token",
+    category: secret,
+    severity: "critical",
+    description: "Atlassian API token",
+    pattern: /\bATATT3xFfGF0[A-Za-z0-9_=-]{100,400}(?![A-Za-z0-9_=-])/g
   },
   {
     id: "slack-app-token",
@@ -249,13 +359,85 @@ export const contentRules = [
     pattern: /\blin_(?:api|oauth)_[A-Za-z0-9]{40,48}\b/g
   },
   {
+    id: "airtable-token",
+    category: secret,
+    severity: "high",
+    description: "Airtable personal access token",
+    pattern: /\bpat[A-Za-z0-9]{14}\.[0-9a-f]{64}\b/g
+  },
+  {
+    id: "supabase-token",
+    category: secret,
+    severity: "high",
+    description: "Supabase access token",
+    pattern: /\bsbp_[0-9a-f]{40}\b/g
+  },
+  {
+    id: "postman-api-key",
+    category: secret,
+    severity: "high",
+    description: "Postman API key",
+    pattern: /\bPMAK-[0-9a-f]{24}-[0-9a-f]{34}\b/g
+  },
+  {
+    id: "figma-token",
+    category: secret,
+    severity: "high",
+    description: "Figma personal access token",
+    pattern: /\bfigd_[A-Za-z0-9_-]{40,64}(?![A-Za-z0-9_-])/g
+  },
+  {
+    id: "new-relic-key",
+    category: secret,
+    severity: "high",
+    description: "New Relic API key",
+    pattern: /\bNR(?:AK|AA|II)-[A-Za-z0-9]{27}\b/g
+  },
+  {
+    id: "sonarqube-token",
+    category: secret,
+    severity: "high",
+    description: "SonarQube token",
+    pattern: /\bsq[apu]_[0-9a-f]{40}\b/g
+  },
+  {
+    id: "sentry-dsn",
+    category: secret,
+    severity: "medium",
+    description: "Sentry DSN with a project key",
+    pattern: /https:\/\/[0-9a-f]{32,64}@o\d+\.ingest\.(?:[a-z]{2}\.)?sentry\.io\/\d+/g
+  },
+  {
+    id: "mailgun-api-key",
+    category: secret,
+    severity: "high",
+    description: "Mailgun API key",
+    pattern: /\bkey-[0-9a-f]{32}\b/g
+  },
+  {
+    id: "mailchimp-api-key",
+    category: secret,
+    severity: "high",
+    description: "Mailchimp API key",
+    pattern: /\b[0-9a-f]{32}-us\d{1,2}\b/g
+  },
+  {
     id: "connection-string-password",
     category: secret,
     severity: "high",
     description: "Password in a connection string",
-    pattern: /\b(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?):\/\/[^\s:@/]+:([^\s@/]+)@[^\s]+/gi,
+    pattern: /\b(?:postgres(?:ql)?|mysql|mariadb|mongodb(?:\+srv)?|rediss?|amqps?|mssql|sqlserver|clickhouse):\/\/[^\s:@/]+:([^\s@/]+)@[^\s]+/gi,
     valueGroup: 1,
     validate: hasCredentialValue
+  },
+  {
+    id: "url-basic-auth",
+    category: secret,
+    severity: "high",
+    description: "Credential embedded in a URL",
+    pattern: /\b(?:https?|ftps?|sftp|ssh|smtps?|ldaps?):\/\/[^\s:@/]+:([^\s@/]{8,})@[^\s]/gi,
+    valueGroup: 1,
+    validate: hasUrlCredentialValue
   },
   {
     id: "generic-secret",
@@ -274,11 +456,27 @@ export const contentRules = [
     pattern: /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b(?<!\.(?:png|jpe?g|gif|svg|webp|ico|bmp|css|scss|less|js|mjs|cjs|json|html?|xml|lock|map|woff2?|ttf|eot))/gi
   },
   {
+    id: "credit-card-number",
+    category: privacy,
+    severity: "high",
+    description: "Payment card number",
+    pattern: /\b(?:\d{13,19}|\d{4}(?:[ -]\d{4}){2,3}(?:[ -]\d{1,3})?|\d{4}[ -]\d{6}[ -]\d{5})\b/g,
+    validate: isPaymentCard
+  },
+  {
+    id: "us-social-security-number",
+    category: privacy,
+    severity: "high",
+    description: "US Social Security number",
+    pattern: /\b(?!000|666|9\d\d)\d{3}-(?!00)\d{2}-(?!0000)\d{4}\b/g
+  },
+  {
     id: "windows-user-path",
     category: privacy,
     severity: "medium",
     description: "Local Windows user path",
-    pattern: /\b[A-Z]:\\Users\\[^\\\s"'<>]+/gi
+    pattern: /\b[A-Za-z]:[\\/]Users[\\/][^\\/\s"'<>:*?|]+/g,
+    validate: value => !sharedWindowsAccounts.test(value)
   },
   {
     id: "unix-home-path",
@@ -300,14 +498,20 @@ export const contentRules = [
     category: privacy,
     severity: "low",
     description: "IPv6 address",
-    pattern: /(?<![0-9a-fA-F:.])(?!(?:2001:0{0,3}db8|3fff|fe80|ff[0-9a-fA-F]{2})[0-9a-fA-F:]*)(?:(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|(?:[0-9a-fA-F]{1,4}:){1,7}:|(?:[0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|(?:[0-9a-fA-F]{1,4}:){1,5}(?::[0-9a-fA-F]{1,4}){1,2}|(?:[0-9a-fA-F]{1,4}:){1,4}(?::[0-9a-fA-F]{1,4}){1,3}|(?:[0-9a-fA-F]{1,4}:){1,3}(?::[0-9a-fA-F]{1,4}){1,4}|(?:[0-9a-fA-F]{1,4}:){1,2}(?::[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:(?::[0-9a-fA-F]{1,4}){1,6})(?![0-9a-fA-F:])/g
+    pattern: /(?<![0-9a-fA-F:.])(?!(?:2001:0{0,3}db8|3fff|fe80|ff[0-9a-fA-F]{2})[0-9a-fA-F:]*)(?:(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|(?:[0-9a-fA-F]{1,4}:){1,7}:|(?:[0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|(?:[0-9a-fA-F]{1,4}:){1,5}(?::[0-9a-fA-F]{1,4}){1,2}|(?:[0-9a-fA-F]{1,4}:){1,4}(?::[0-9a-fA-F]{1,4}){1,3}|(?:[0-9a-fA-F]{1,4}:){1,3}(?::[0-9a-fA-F]{1,4}){1,4}|(?:[0-9a-fA-F]{1,4}:){1,2}(?::[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:(?::[0-9a-fA-F]{1,4}){1,6})(?![0-9a-fA-F:])/g,
+    validate: value => value.split(/:+/).filter(Boolean).length >= 3
   }
 ]
 
 export const riskyFileRules = [
   { id: "dotenv-file", category: secret, severity: "high", description: "Environment file", pattern: /(?:^|\/)\.env(?:\..+)?$/i, except: /\.example$|\.sample$|\.template$/i },
-  { id: "private-key-file", category: secret, severity: "critical", description: "Private key file", pattern: /(?:^|\/)(?:id_(?:rsa|dsa|ecdsa|ed25519)|.+\.(?:pem|p12|pfx|key))$/i },
-  { id: "credential-file", category: secret, severity: "high", description: "Credential configuration file", pattern: /(?:^|\/)(?:credentials|secrets?\.json|\.npmrc|\.pypirc|\.netrc|kubeconfig)$/i }
+  { id: "private-key-file", category: secret, severity: "critical", description: "Private key file", pattern: /(?:^|\/)(?:id_(?:rsa|dsa|ecdsa|ed25519)|.+\.(?:pem|p12|pfx|key|p8|ppk))$/i },
+  { id: "credential-file", category: secret, severity: "high", description: "Credential configuration file", pattern: /(?:^|\/)(?:credentials|credentials\.json|secrets?\.json|\.npmrc|\.pypirc|\.netrc|\.htpasswd|\.pgpass|\.git-credentials|\.dockercfg|kubeconfig)$/i },
+  { id: "secret-store-file", category: secret, severity: "high", description: "Key or credential store file", pattern: /(?:^|\/).+\.(?:jks|keystore|truststore|kdbx|ovpn)$/i },
+  { id: "service-account-key-file", category: secret, severity: "high", description: "Service account key file", pattern: /(?:^|\/)(?:[^/]*service[_-]?account[^/]*|client[_-]?secret[^/]*)\.json$/i },
+  { id: "infrastructure-state-file", category: secret, severity: "medium", description: "Infrastructure state or variable file", pattern: /(?:^|\/)(?:terraform\.tfstate(?:\.backup)?|[^/]+\.tfvars(?:\.json)?)$/i },
+  { id: "backup-file", category: hygiene, severity: "low", description: "Backup or editor temporary file", pattern: /(?:^|\/)[^/]*(?:\.(?:bak|old|orig|rej|save|swp|swo)|~)$/i },
+  { id: "os-metadata-file", category: hygiene, severity: "low", description: "Operating system metadata file", pattern: /(?:^|\/)(?:\.DS_Store|Thumbs\.db|desktop\.ini)$/i }
 ]
 
 export const entropyRule = {
@@ -317,12 +521,14 @@ export const entropyRule = {
   description: "High-entropy credential-like value"
 }
 
-export const allRules = [...contentRules, ...riskyFileRules, entropyRule, {
+export const largeFileRule = {
   id: "large-file",
-  category: "hygiene",
+  category: hygiene,
   severity: "medium",
   description: "Large file"
-}]
+}
+
+export const allRules = [...contentRules, ...riskyFileRules, entropyRule, largeFileRule]
 
 export const ruleById = new Map(allRules.map(rule => [rule.id, rule]))
 export const categories = [...new Set(allRules.map(rule => rule.category))].sort()
