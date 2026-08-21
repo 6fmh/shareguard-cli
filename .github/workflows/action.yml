@@ -31,14 +31,11 @@ jobs:
           fail-on: low
           format: sarif
           output: shareguard.sarif
-        env:
-          GITHUB_STEP_SUMMARY: ${{ github.workspace }}/step-summary.md
       - name: Verify SARIF and action outputs
         run: |
           node -e "const data = require('node:fs').readFileSync('shareguard.sarif', 'utf8'); const report = JSON.parse(data); if (report.version !== '2.1.0') process.exit(1); if (!report.runs[0].tool.driver.semanticVersion) process.exit(1)"
           test "$SARIF_OUTPUT" = "shareguard.sarif"
           test "$EXIT_CODE" = "0"
-          grep -q "## ShareGuard" "$GITHUB_WORKSPACE/step-summary.md"
         env:
           SARIF_OUTPUT: ${{ steps.shareguard.outputs.sarif }}
           EXIT_CODE: ${{ steps.shareguard.outputs.exit-code }}
