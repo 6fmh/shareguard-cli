@@ -251,7 +251,7 @@ export const contentRules = [
     category: secret,
     severity: "medium",
     description: "Slack incoming webhook URL",
-    pattern: /https:\/\/hooks\.slack\.com\/services\/T[A-Za-z0-9]+\/B[A-Za-z0-9]+\/[A-Za-z0-9]{24}/g
+    pattern: /^https:\/\/hooks\.slack\.com\/services\/T[A-Za-z0-9]+\/B[A-Za-z0-9]+\/[A-Za-z0-9]{24}$/g
   },
   {
     id: "discord-bot-token",
